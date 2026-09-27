@@ -181,41 +181,43 @@ npm run deploy     # = opennextjs-cloudflare build && opennextjs-cloudflare depl
 > `public/_headers` 里的 `/_next/static/*` 永久缓存规则会在部署时被解析生效
 > （`wrangler dev` 启动日志会打印 `Parsed 1 valid header rule.`）。
 
-### 用 Git 集成自动部署（可选）
+### 用 Cloudflare Git 集成自动部署（可选）
 
-Dashboard → Workers & Pages → 选择 `my-ledger` → Settings → Builds，配置：
+Cloudflare 的 **Workers Builds** 可以直接连接 GitHub / GitLab 仓库，push 后自动构建并部署，
+不需要自建 CI：
+
+- **新建 Worker**：Workers & Pages → Create application → 在 **Import a repository** 处 Get started
+- **接入已有 Worker**：Workers & Pages → 选中 `my-ledger` → Settings → **Builds** → Connect
+
+连接后按下表填写构建配置：
 
 | 配置项 | 值 |
 | --- | --- |
+| Git account / repository | 你的 GitHub 账号与 `my-ledger` 仓库 |
+| Git branch | `main` |
+| Root directory | `/`（留空亦可，非 monorepo） |
 | Build command | `npx opennextjs-cloudflare build` |
-| Deploy command | `npx opennextjs-cloudflare deploy` |
-| Environment variables | `NODE_VERSION = 22`（或更高） |
+| Deploy command | `npx wrangler d1 migrations apply my-ledger-db --remote && npx opennextjs-cloudflare deploy` |
+| Preview command | `npx wrangler versions upload`（不需要预览构建时可在同一页面关闭） |
 
-D1 等绑定会从仓库里的 `wrangler.toml` 读取，**无需**在 Dashboard 手动添加。
-机密仍需通过 `wrangler secret put` 预先设置。
+要点：
 
-### 用 GitHub Actions 自动部署
+- **Worker 名称必须与 `wrangler.toml` 的 `name` 完全一致（即 `my-ledger`）**，否则构建会失败。
+- **D1 绑定与 `[vars]` 无需在 Dashboard 手动添加**：`wrangler deploy` 会直接读取仓库里的
+  `wrangler.toml`，因此 `DB` 绑定、`APP_ENV`、`AUTH_DEV_MODE` 等随部署自动生效。
+- **迁移在 Deploy command 里用 `&&` 串联**：`wrangler d1 migrations apply` 是幂等的，
+  重复执行只会跳过已应用的迁移，不会重复建表。
+- **Node 版本无需设置**：Workers Builds 构建镜像默认 Node.js 24.18.0，已满足要求
+  （本地验证版本为 v24.21.0）。如需固定，可加构建变量 `NODE_VERSION` 或提交 `.nvmrc`。
+- **机密仍走 Settings → Variables and Secrets**（或 `wrangler secret put`）：
+  `AUTH_JWT_SECRET`、`ADMIN_JWT_SECRET`、`WECHAT_APP_ID`、`WECHAT_APP_SECRET`、
+  `WECHAT_OAUTH_REDIRECT_BASE`。首次构建前先设好，否则 `/api/health` 会报缺少密钥。
+- **Build variables 与运行时变量是两套**：前者仅构建期可见。本项目没有 `NEXT_PUBLIC_*`，
+  构建期无需额外变量。
+- 仓库已存在 `wrangler.toml`，因此不会触发 Cloudflare 的 autoconfig（自动建 PR 那套流程）。
 
-仓库已内置 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)，**仅支持手动触发**
-（`workflow_dispatch`），不会在 push 时自动上线，避免误改代码直接进生产。
-
-触发前置配置：仓库 Settings → Secrets and variables → Actions，新增两个 Secret：
-
-| Secret | 说明 |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API Token，权限至少需 **Workers Scripts:Edit**、**D1:Edit**、**Account Settings:Read** |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账号 ID（Dashboard 右侧栏或 `npx wrangler whoami` 可见） |
-
-工作流步骤依次为：`checkout` → `setup-node`（Node 24 + npm 缓存）→ `npm ci` →
-`npm run lint` → `npm run typecheck` → `npm test` → `npm run db:migrate:remote` → `npm run deploy`。
-任一校验失败即中止，不会部署，也不会跑迁移。
-
-触发方式：仓库 Actions 页面 → 左侧选「Deploy to Cloudflare Workers」→ Run workflow。
-工作流带 `concurrency: deploy-production` 且 `cancel-in-progress: false`，
-因此同时只会有一个部署在跑，进行中的 D1 迁移不会被新的运行打断。
-
-> Secret 只注入 Job 环境变量，不写入代码库；`wrangler.toml` 中的 `database_id` 是资源标识符
-> 而非凭据，可安全提交到公开仓库。
+> `wrangler.toml` 里的 `database_id` 是资源标识符而非凭据，可安全提交到公开仓库；
+> 真正需要保密的是 API Token 与上述运行时机密。
 
 ## 6. 微信登录配置（可选）
 
