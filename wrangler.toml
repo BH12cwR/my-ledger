@@ -28,14 +28,16 @@ binding = "WORKER_SELF_REFERENCE"
 service = "my-ledger"
 
 # ---------------------------------------------------------------------------
-# D1 SQLite 绑定。database_id 需替换为 `wrangler d1 create my-ledger-db` 输出的真实 ID。
+# D1 SQLite 绑定。
+# database_id 是资源标识符而非凭据，可安全提交到公开仓库：访问 D1 还需要
+# 账号级 API Token / wrangler 登录态，仅凭该 ID 无法读写数据。
 # 本地开发（next dev + initOpenNextCloudflareForDev）会使用 --local 的
 # 本地 SQLite 副本（.wrangler/state/v3/d1），不校验该 ID 的真实性。
 # ---------------------------------------------------------------------------
 [[d1_databases]]
 binding = "DB"
 database_name = "my-ledger-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "512beef9-a2a8-4741-88ff-6c6c5c1cad05"
 migrations_dir = "migrations"
 
 # 说明：未声明 images 绑定。项目未使用 next/image，适配器在 env.IMAGES 未定义时

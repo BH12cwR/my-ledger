@@ -194,6 +194,29 @@ Dashboard → Workers & Pages → 选择 `my-ledger` → Settings → Builds，�
 D1 等绑定会从仓库里的 `wrangler.toml` 读取，**无需**在 Dashboard 手动添加。
 机密仍需通过 `wrangler secret put` 预先设置。
 
+### 用 GitHub Actions 自动部署
+
+仓库已内置 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)，**仅支持手动触发**
+（`workflow_dispatch`），不会在 push 时自动上线，避免误改代码直接进生产。
+
+触发前置配置：仓库 Settings → Secrets and variables → Actions，新增两个 Secret：
+
+| Secret | 说明 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API Token，权限至少需 **Workers Scripts:Edit**、**D1:Edit**、**Account Settings:Read** |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账号 ID（Dashboard 右侧栏或 `npx wrangler whoami` 可见） |
+
+工作流步骤依次为：`checkout` → `setup-node`（Node 24 + npm 缓存）→ `npm ci` →
+`npm run lint` → `npm run typecheck` → `npm test` → `npm run db:migrate:remote` → `npm run deploy`。
+任一校验失败即中止，不会部署，也不会跑迁移。
+
+触发方式：仓库 Actions 页面 → 左侧选「Deploy to Cloudflare Workers」→ Run workflow。
+工作流带 `concurrency: deploy-production` 且 `cancel-in-progress: false`，
+因此同时只会有一个部署在跑，进行中的 D1 迁移不会被新的运行打断。
+
+> Secret 只注入 Job 环境变量，不写入代码库；`wrangler.toml` 中的 `database_id` 是资源标识符
+> 而非凭据，可安全提交到公开仓库。
+
 ## 6. 微信登录配置（可选）
 
 在**微信开放平台** → 网站应用 → 授权回调域，填写你的域名（不带协议与路径）：
