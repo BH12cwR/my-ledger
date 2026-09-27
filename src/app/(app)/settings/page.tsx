@@ -1,0 +1,538 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Archive, ArchiveRestore, Loader2, LogOut, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { CategoryIcon } from "@/components/category-icon";
+import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { useSession } from "@/components/providers/session-provider";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  api,
+  errorMessage,
+  type AccountBalanceItem,
+  type AccountDto,
+  type CategoryDto,
+  type TagDto,
+} from "@/lib/api";
+import { dateTime, money } from "@/lib/format";
+import { useApiQuery } from "@/lib/hooks";
+import { parseAmountToCents } from "@/lib/money";
+import { cn } from "@/lib/utils";
+
+const ACCOUNT_TYPES = [
+  { value: "cash", label: "现金" },
+  { value: "bank", label: "银行卡" },
+  { value: "wechat", label: "微信" },
+  { value: "alipay", label: "支付宝" },
+  { value: "credit", label: "信用卡" },
+  { value: "other", label: "其他" },
+] as const;
+
+const PALETTE = [
+  "#64748b",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#10b981",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+];
+
+/**
+ * 「我的」页：账户 / 分类 / 标签的个人化配置 + 退出登录。
+ *
+ * 账户的具体余额由 /api/stats/accounts 计算（初始余额 + 收入 - 支出），
+ * 前端只负责展示，不做任何金额运算。
+ */
+export default function SettingsPage() {
+  const { user, logout } = useSession();
+  const router = useRouter();
+
+  const [showArchived, setShowArchived] = useState(false);
+  const accounts = useApiQuery<{ items: AccountDto[] }>(
+    `/api/accounts${showArchived ? "?includeArchived=true" : ""}`,
+  );
+  const balances = useApiQuery<{ items: AccountBalanceItem[] }>(
+    `/api/stats/accounts${showArchived ? "?includeArchived=true" : ""}`,
+  );
+  const categories = useApiQuery<{ items: CategoryDto[] }>(
+    `/api/categories?includeArchived=true`,
+  );
+  const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
+
+  const [accountDialog, setAccountDialog] = useState(false);
+  const [accountName, setAccountName] = useState("");
+  const [accountType, setAccountType] = useState<string>("cash");
+  const [accountBalance, setAccountBalance] = useState("");
+  const [categoryDialog, setCategoryDialog] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryKind, setCategoryKind] = useState<string>("expense");
+  const [categoryColor, setCategoryColor] = useState(PALETTE[5]);
+  const [tagName, setTagName] = useState("");
+  const [tagColor, setTagColor] = useState(PALETTE[3]);
+  const [busy, setBusy] = useState(false);
+
+  const balanceById = new Map((balances.data?.items ?? []).map((item) => [item.id, item]));
+
+  /**
+   * 账户余额由 /api/stats/accounts 单独计算（初始余额 + 收入 - 支出），
+   * 与账户列表是两个请求，返回顺序不固定。
+   *
+   * 因此余额未就绪时显示占位符，而不是回退到 initialBalanceCents ——
+   * 回退会先渲染一个不等于真实余额的数字，待余额请求返回后再跳变。
+   * 该接口以 accounts 为左表，就绪后必然覆盖全部账户，不会长期停在占位符。
+   */
+  function renderBalance(accountId: string) {
+    const balance = balanceById.get(accountId);
+    if (!balance) {
+      return (
+        <span className="text-muted-foreground" aria-label="余额加载中">
+          —
+        </span>
+      );
+    }
+    return money(balance.balanceCents);
+  }
+
+  async function run(action: () => Promise<unknown>, success: string, reload: () => void) {
+    setBusy(true);
+    try {
+      await action();
+      toast.success(success);
+      reload();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateAccount() {
+    let initialBalance = "0";
+    try {
+      initialBalance = accountBalance.trim() === "" ? "0" : String(parseAmountToCents(accountBalance));
+    } catch (error) {
+      toast.error(errorMessage(error));
+      return;
+    }
+
+    await run(
+      async () => {
+        await api.post("/api/accounts", {
+          name: accountName.trim(),
+          type: accountType,
+          initialBalance,
+        });
+        setAccountDialog(false);
+        setAccountName("");
+        setAccountBalance("");
+      },
+      "账户已创建",
+      () => {
+        accounts.reload();
+        balances.reload();
+      },
+    );
+  }
+
+  async function handleCreateCategory() {
+    await run(
+      async () => {
+        await api.post("/api/categories", {
+          name: categoryName.trim(),
+          kind: categoryKind,
+          color: categoryColor,
+        });
+        setCategoryDialog(false);
+        setCategoryName("");
+      },
+      "分类已创建",
+      categories.reload,
+    );
+  }
+
+  async function handleCreateTag() {
+    await run(
+      async () => {
+        await api.post("/api/tags", { name: tagName.trim(), color: tagColor });
+        setTagName("");
+      },
+      "标签已创建",
+      tags.reload,
+    );
+  }
+
+  async function handleLogout() {
+    await logout();
+    toast.success("已退出登录");
+    router.replace("/login");
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="font-heading text-lg font-semibold">我的</h1>
+
+      <Card>
+        <CardContent className="flex items-center gap-3">
+          <span className="inline-flex size-11 items-center justify-center rounded-full bg-primary/10 font-heading text-base text-primary">
+            {(user?.nickname ?? "记").slice(0, 1)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-medium">{user?.nickname ?? "未登录"}</p>
+            <p className="text-xs text-muted-foreground">
+              注册于 {dateTime(user?.createdAt)} · 上次登录 {dateTime(user?.lastLoginAt)}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut />
+            退出
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2">
+        <div>
+          <p className="text-sm">显示已归档</p>
+          <p className="text-xs text-muted-foreground">归档项不再出现在记账表单中</p>
+        </div>
+        <Switch checked={showArchived} onCheckedChange={setShowArchived} />
+      </div>
+
+      <Tabs defaultValue="accounts">
+        <TabsList className="w-full">
+          <TabsTrigger value="accounts">账户</TabsTrigger>
+          <TabsTrigger value="categories">分类</TabsTrigger>
+          <TabsTrigger value="tags">标签</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="accounts" className="mt-3 flex flex-col gap-3">
+          <Button size="sm" onClick={() => setAccountDialog(true)}>
+            <Plus />
+            新增账户
+          </Button>
+          {accounts.loading ? (
+            <LoadingBlock />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {(accounts.data?.items ?? []).map((account) => (
+                <div
+                  key={account.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{account.name}</span>
+                      {account.archived ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          已归档
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {ACCOUNT_TYPES.find((item) => item.value === account.type)?.label ??
+                        account.type}
+                    </p>
+                  </div>
+                  <span className="font-mono text-sm tabular-nums">
+                    {renderBalance(account.id)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
+                    aria-label={account.archived ? "恢复账户" : "归档账户"}
+                    onClick={() =>
+                      void run(
+                        () =>
+                          api.patch(`/api/accounts/${account.id}`, {
+                            archived: !account.archived,
+                          }),
+                        account.archived ? "账户已恢复" : "账户已归档",
+                        () => {
+                          accounts.reload();
+                          balances.reload();
+                        },
+                      )
+                    }
+                  >
+                    {account.archived ? <ArchiveRestore /> : <Archive />}
+                  </Button>
+                </div>
+              ))}
+              {(accounts.data?.items ?? []).length === 0 ? (
+                <EmptyBlock title="还没有账户" description="新增一个账户，记账时即可归类" />
+              ) : null}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="categories" className="mt-3 flex flex-col gap-3">
+          <Button size="sm" onClick={() => setCategoryDialog(true)}>
+            <Plus />
+            新增分类
+          </Button>
+          {categories.loading ? (
+            <LoadingBlock />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {(categories.data?.items ?? []).map((category) => (
+                <div
+                  key={category.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2"
+                >
+                  <CategoryIcon name={category.icon} color={category.color} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{category.name}</span>
+                      {category.system ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          内置
+                        </Badge>
+                      ) : null}
+                      {category.archived ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          已归档
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {category.kind === "income" ? "收入" : "支出"}
+                    </p>
+                  </div>
+                  {category.system ? null : (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={busy}
+                      aria-label={category.archived ? "恢复分类" : "归档分类"}
+                      onClick={() =>
+                        void run(
+                          () =>
+                            api.patch(`/api/categories/${category.id}`, {
+                              archived: !category.archived,
+                            }),
+                          category.archived ? "分类已恢复" : "分类已归档",
+                          categories.reload,
+                        )
+                      }
+                    >
+                      {category.archived ? <ArchiveRestore /> : <Archive />}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="tags" className="mt-3 flex flex-col gap-3">
+          <div className="flex items-end gap-2">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label htmlFor="tagName">新标签</Label>
+              <Input
+                id="tagName"
+                maxLength={12}
+                placeholder="例如：出差"
+                value={tagName}
+                onChange={(event) => setTagName(event.target.value)}
+              />
+            </div>
+            <ColorPicker value={tagColor} onChange={setTagColor} label="标签颜色" />
+            <Button
+              size="sm"
+              disabled={busy || tagName.trim() === ""}
+              onClick={handleCreateTag}
+            >
+              <Plus />
+              添加
+            </Button>
+          </div>
+
+          {tags.loading ? (
+            <LoadingBlock />
+          ) : (tags.data?.items ?? []).length === 0 ? (
+            <EmptyBlock title="还没有标签" description="标签用于给账目加维度，例如「出差」「报销」" />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {(tags.data?.items ?? []).map((tag) => (
+                <div
+                  key={tag.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2"
+                >
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ backgroundColor: tag.color }}
+                    aria-hidden
+                  />
+                  <span className="flex-1 truncate text-sm">{tag.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
+                    aria-label="删除标签"
+                    onClick={() =>
+                      void run(
+                        () => api.delete(`/api/tags/${tag.id}`),
+                        "标签已删除",
+                        tags.reload,
+                      )
+                    }
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={accountDialog} onOpenChange={setAccountDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>新增账户</DialogTitle>
+            <DialogDescription>账户用于区分资金去向，余额 = 初始余额 + 收入 - 支出</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="accountName">名称</Label>
+              <Input
+                id="accountName"
+                maxLength={20}
+                value={accountName}
+                onChange={(event) => setAccountName(event.target.value)}
+                placeholder="例如：招商银行"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>类型</Label>
+              <Select value={accountType} onValueChange={setAccountType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_TYPES.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="accountBalance">初始余额</Label>
+              <Input
+                id="accountBalance"
+                inputMode="decimal"
+                value={accountBalance}
+                onChange={(event) => setAccountBalance(event.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={busy || accountName.trim() === ""} onClick={handleCreateAccount}>
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>新增分类</DialogTitle>
+            <DialogDescription>系统内置分类不可修改，自建分类可随时归档</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="categoryName">名称</Label>
+              <Input
+                id="categoryName"
+                maxLength={20}
+                value={categoryName}
+                onChange={(event) => setCategoryName(event.target.value)}
+                placeholder="例如：宠物"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>类型</Label>
+              <Select value={categoryKind} onValueChange={setCategoryKind}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">支出</SelectItem>
+                  <SelectItem value="income">收入</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <ColorPicker value={categoryColor} onChange={setCategoryColor} label="分类颜色" />
+          </div>
+          <DialogFooter>
+            <Button disabled={busy || categoryName.trim() === ""} onClick={handleCreateCategory}>
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ColorPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>{label}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {PALETTE.map((color) => (
+          <button
+            key={color}
+            type="button"
+            aria-label={`选择颜色 ${color}`}
+            onClick={() => onChange(color)}
+            className={cn(
+              "size-6 rounded-full border-2 transition-transform",
+              value === color ? "border-foreground scale-110" : "border-transparent",
+            )}
+            style={{ backgroundColor: color }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,55 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# cloudflare / wrangler
+/.wrangler
+.dev.vars
+/worker-configuration.d.ts
+# `npm run cf-typegen` 生成的绑定类型
+/cloudflare-env.d.ts
+
+# @opennextjs/cloudflare 构建产物
+/.open-next
+
+# Serwist 构建期自动生成的 Service Worker 产物
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

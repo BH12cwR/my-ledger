@@ -1,0 +1,6 @@
+# Cloudflare Workers 静态资源响应头。
+#
+# Next.js 的 /_next/static/* 文件名带内容哈希，可以永久缓存；
+# 这是 @opennextjs/cloudflare 官方推荐的最小配置，能显著减少回源。
+/_next/static/*
+  Cache-Control: public,max-age=31536000,immutable

@@ -1,0 +1,36 @@
+# 说明：Cloudflare 的敏感配置不放在 wrangler.toml 的 [vars] 中。
+# - 本地开发：复制本文件为 .dev.vars（已被 .gitignore 忽略）
+# - 生产环境：wrangler pages secret put <KEY> --project-name my-ledger
+
+# 用户端会话 JWT 签名密钥（至少 32 字符，建议 openssl rand -base64 48 生成）
+AUTH_JWT_SECRET=dev-only-user-jwt-secret-please-change-me-32chars
+
+# 管理员会话 JWT 签名密钥（必须与用户端不同）
+ADMIN_JWT_SECRET=dev-only-admin-jwt-secret-please-change-me-32chars
+
+# 微信开放平台「网站应用」凭据；未配置时用户端可走模拟登录
+WECHAT_APP_ID=
+WECHAT_APP_SECRET=
+
+# 微信 OAuth 回调地址前缀（需与开放平台配置的回调域名一致）
+WECHAT_OAUTH_REDIRECT_BASE=http://localhost:3000
+
+# 仅本地开发置为 true；生产必须为 false
+AUTH_DEV_MODE=true
+
+# 运行环境。注意 wrangler.toml 的 [vars] 里是 production，本地必须用本文件覆盖为
+# development，否则 /api/auth/dev-login 会因「生产环境已禁用开发模式登录」返回 403。
+# .dev.vars 的优先级高于 wrangler.toml 的 [vars]，只影响本地。
+APP_ENV=development
+
+# @opennextjs/cloudflare 读取 Next.js .env 文件时使用的环境名。
+# 不设置时默认为 production，会导致本地加载生产环境变量。
+NEXTJS_ENV=development
+
+# 管理员口令哈希的 PBKDF2 迭代次数。
+# Workers 免费版单请求 CPU 上限为 10ms，20_000 次约等于 bcrypt cost=10 的开销。
+# 若使用 Workers Paid 计划，可提高到 100_000 以上。
+ADMIN_PBKDF2_ITERATIONS=20000
+
+# 普通用户口令哈希的 PBKDF2 迭代次数；未配置时回落到与管理员相同的默认值（20_000）。
+USER_PBKDF2_ITERATIONS=20000
