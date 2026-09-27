@@ -10,11 +10,19 @@ export class AmountError extends Error {
   }
 }
 
+export interface ParseAmountOptions {
+  /**
+   * 是否允许 0。默认拒绝，保持「金额必须大于 0」的约束不变。
+   * 账户初始余额可以为 0，因此这类场景需要显式打开。
+   */
+  allowZero?: boolean;
+}
+
 /**
  * 把用户输入（字符串或数字）解析为「分」。
  * 只接受最多两位小数的十进制表示，刻意拒绝科学计数法与浮点数四舍五入。
  */
-export function parseAmountToCents(input: string | number): number {
+export function parseAmountToCents(input: string | number, options: ParseAmountOptions = {}): number {
   const raw =
     typeof input === "number"
       ? Number.isFinite(input)
@@ -33,7 +41,7 @@ export function parseAmountToCents(input: string | number): number {
   if (!Number.isSafeInteger(cents)) {
     throw new AmountError("金额超出可处理范围");
   }
-  if (cents <= 0) {
+  if (cents === 0 && !options.allowZero) {
     throw new AmountError("金额必须大于 0");
   }
   if (cents > MAX_AMOUNT_CENTS) {

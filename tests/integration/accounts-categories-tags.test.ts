@@ -49,6 +49,17 @@ describe("accounts", () => {
     expect((await listAccounts(db, userId)).map((item) => item.id)).toContain(account.id);
   });
 
+  it("初始余额为 0 时按 0 保存", async () => {
+    const account = await createAccount(db, userId, {
+      name: "现金",
+      type: "cash",
+      icon: "wallet",
+      initialBalance: "0",
+      sortOrder: 2,
+    });
+    expect(account.initial_balance_cents).toBe(0);
+  });
+
   it("更新名称与初始余额", async () => {
     const account = await createAccount(db, userId, {
       name: "招商银行",
@@ -59,6 +70,18 @@ describe("accounts", () => {
     const updated = await updateAccount(db, userId, account.id, { name: "招行", initialBalance: "600.00" }, NOW);
     expect(updated.name).toBe("招行");
     expect(updated.initial_balance_cents).toBe(60000);
+  });
+
+  it("可以把初始余额改为 0", async () => {
+    const account = await createAccount(db, userId, {
+      name: "招商银行",
+      type: "bank",
+      icon: "credit-card",
+      initialBalance: "500.00",
+      sortOrder: 1,
+    });
+    const updated = await updateAccount(db, userId, account.id, { initialBalance: "0.00" }, NOW);
+    expect(updated.initial_balance_cents).toBe(0);
   });
 
   it("归档后默认列表不含，includeArchived 才含", async () => {

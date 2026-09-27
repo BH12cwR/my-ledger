@@ -36,7 +36,9 @@ export async function createAccount(
   now = nowMs(),
 ): Promise<AccountRecord> {
   const id = crypto.randomUUID();
-  const initialBalanceCents = input.initialBalance === undefined ? 0 : toCents(input.initialBalance);
+  // 初始余额允许为 0（新建账户时通常就是 0），与交易金额「必须大于 0」的约束不同
+  const initialBalanceCents =
+    input.initialBalance === undefined ? 0 : toCents(input.initialBalance, { allowZero: true });
 
   await db
     .prepare(
@@ -82,7 +84,9 @@ export async function updateAccount(
   if (input.name !== undefined) push("name", input.name);
   if (input.type !== undefined) push("type", input.type);
   if (input.icon !== undefined) push("icon", input.icon);
-  if (input.initialBalance !== undefined) push("initial_balance_cents", toCents(input.initialBalance));
+  if (input.initialBalance !== undefined) {
+    push("initial_balance_cents", toCents(input.initialBalance, { allowZero: true }));
+  }
   if (input.sortOrder !== undefined) push("sort_order", input.sortOrder);
   push("updated_at", now);
 

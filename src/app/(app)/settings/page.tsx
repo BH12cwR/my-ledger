@@ -39,7 +39,7 @@ import {
 } from "@/lib/api";
 import { dateTime, money } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
-import { parseAmountToCents } from "@/lib/money";
+import { centsToInputValue, parseAmountToCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 const ACCOUNT_TYPES = [
@@ -132,9 +132,15 @@ export default function SettingsPage() {
   }
 
   async function handleCreateAccount() {
-    let initialBalance = "0";
+    // 接口的 initialBalance 口径是「元」字符串，必须先归一化回元再提交。
+    // 直接把分提交上去会被后端当成元再换算一次，导致金额放大 100 倍。
+    // 初始余额允许为 0，因此需要显式打开 allowZero。
+    let initialBalance: string;
     try {
-      initialBalance = accountBalance.trim() === "" ? "0" : String(parseAmountToCents(accountBalance));
+      const cents = parseAmountToCents(accountBalance.trim() === "" ? "0" : accountBalance, {
+        allowZero: true,
+      });
+      initialBalance = centsToInputValue(cents);
     } catch (error) {
       toast.error(errorMessage(error));
       return;

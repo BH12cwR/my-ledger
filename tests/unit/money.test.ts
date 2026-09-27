@@ -40,6 +40,19 @@ describe("parseAmountToCents", () => {
     expect(() => parseAmountToCents("")).toThrow(AmountError);
   });
 
+  it("allowZero 时接受 0（账户初始余额场景）", () => {
+    expect(parseAmountToCents("0", { allowZero: true })).toBe(0);
+    expect(parseAmountToCents("0.00", { allowZero: true })).toBe(0);
+    expect(parseAmountToCents(0, { allowZero: true })).toBe(0);
+  });
+
+  it("allowZero 不影响其他校验", () => {
+    expect(() => parseAmountToCents("-1", { allowZero: true })).toThrow(AmountError);
+    expect(() => parseAmountToCents("abc", { allowZero: true })).toThrow(AmountError);
+    expect(() => parseAmountToCents("", { allowZero: true })).toThrow(AmountError);
+    expect(() => parseAmountToCents("1.234", { allowZero: true })).toThrow(AmountError);
+  });
+
   it("拒绝科学计数法", () => {
     expect(() => parseAmountToCents("1e3")).toThrow(AmountError);
     // 浮点数会被 String() 展开为科学计数法，同样被拒绝

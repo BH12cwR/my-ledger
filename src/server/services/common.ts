@@ -1,5 +1,5 @@
 import { ApiError } from "../http/errors";
-import { parseAmountToCents } from "@/lib/money";
+import { parseAmountToCents, type ParseAmountOptions } from "@/lib/money";
 
 /** 服务层公共类型与工具 */
 
@@ -22,9 +22,9 @@ export function paginate<T>(items: T[], total: number, page: number, pageSize: n
 }
 
 /** 把外部传入的金额（字符串/数字）转换为「分」，失败时抛出 400 */
-export function toCents(value: string | number): number {
+export function toCents(value: string | number, options?: ParseAmountOptions): number {
   try {
-    return parseAmountToCents(value);
+    return parseAmountToCents(value, options);
   } catch (error) {
     throw ApiError.badRequest(error instanceof Error ? error.message : "金额格式不正确");
   }
