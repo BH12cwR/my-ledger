@@ -58,6 +58,8 @@ const baseTransaction: TransactionView = {
   account_name: "现金",
   account_type: "cash",
   tags: ["出差"],
+  refund_of_id: null,
+  refunded_at: null,
 };
 
 describe("userDto", () => {

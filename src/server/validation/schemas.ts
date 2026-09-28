@@ -58,6 +58,7 @@ export const listTransactionsQuerySchema = z.object({
   kind: transactionKindSchema.optional(),
   categoryId: z.string().trim().min(1).optional(),
   accountId: z.string().trim().min(1).optional(),
+  tagId: z.string().trim().min(1).optional(),
   keyword: z.string().trim().max(50, "搜索关键词过长").optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -128,6 +129,8 @@ export const updateBudgetSchema = z.object({
 export const rangeQuerySchema = z.object({
   from: daySchema.optional(),
   to: daySchema.optional(),
+  categoryId: z.string().trim().min(1).optional(),
+  tagId: z.string().trim().min(1).optional(),
 });
 
 /** 分类列表：不传 kind 表示同时返回支出与收入分类 */
@@ -139,12 +142,18 @@ export const statsQuerySchema = z.object({
   from: daySchema.optional(),
   to: daySchema.optional(),
   kind: categoryKindSchema.default("expense"),
+  /** 统计维度：按分类聚合或按标签聚合 */
+  dimension: z.enum(["category", "tag"]).default("category"),
+  categoryId: z.string().trim().min(1).optional(),
+  tagId: z.string().trim().min(1).optional(),
 });
 
 export const trendQuerySchema = z.object({
   from: daySchema.optional(),
   to: daySchema.optional(),
   granularity: z.enum(["day", "month"]).default("day"),
+  categoryId: z.string().trim().min(1).optional(),
+  tagId: z.string().trim().min(1).optional(),
 });
 
 export const adminLoginSchema = z.object({

@@ -94,12 +94,16 @@ export default function SettingsPage() {
   const [accountName, setAccountName] = useState("");
   const [accountType, setAccountType] = useState<string>("cash");
   const [accountBalance, setAccountBalance] = useState("");
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [categoryKind, setCategoryKind] = useState<string>("expense");
   const [categoryColor, setCategoryColor] = useState(PALETTE[5]);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [tagDialog, setTagDialog] = useState(false);
   const [tagName, setTagName] = useState("");
   const [tagColor, setTagColor] = useState(PALETTE[3]);
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [budgetDialog, setBudgetDialog] = useState(false);
   const [budgetScope, setBudgetScope] = useState<string>(TOTAL_SCOPE);
   const [budgetPeriod, setBudgetPeriod] = useState<string>("monthly");
@@ -146,7 +150,24 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleCreateAccount() {
+  function openCreateAccount() {
+    setEditingAccountId(null);
+    setAccountName("");
+    setAccountType("cash");
+    setAccountBalance("");
+    setAccountDialog(true);
+  }
+
+  function openEditAccount(account: AccountDto) {
+    setEditingAccountId(account.id);
+    setAccountName(account.name);
+    setAccountType(account.type);
+    // 接口的 initialBalance 口径是「元」字符串，先由分转回元再回填。
+    setAccountBalance(centsToInputValue(account.initialBalanceCents));
+    setAccountDialog(true);
+  }
+
+  async function handleSubmitAccount() {
     // 接口的 initialBalance 口径是「元」字符串，必须先归一化回元再提交。
     // 直接把分提交上去会被后端当成元再换算一次，导致金额放大 100 倍。
     // 初始余额允许为 0，因此需要显式打开 allowZero。
@@ -161,18 +182,21 @@ export default function SettingsPage() {
       return;
     }
 
+    const editing = editingAccountId;
     await run(
       async () => {
-        await api.post("/api/accounts", {
-          name: accountName.trim(),
-          type: accountType,
-          initialBalance,
-        });
+        const body = { name: accountName.trim(), type: accountType, initialBalance };
+        if (editing) {
+          await api.patch(`/api/accounts/${editing}`, body);
+        } else {
+          await api.post("/api/accounts", body);
+        }
         setAccountDialog(false);
         setAccountName("");
         setAccountBalance("");
+        setEditingAccountId(null);
       },
-      "账户已创建",
+      editing ? "账户已更新" : "账户已创建",
       () => {
         accounts.reload();
         balances.reload();
@@ -180,29 +204,77 @@ export default function SettingsPage() {
     );
   }
 
-  async function handleCreateCategory() {
+  function openCreateCategory() {
+    setEditingCategoryId(null);
+    setCategoryName("");
+    setCategoryKind("expense");
+    setCategoryColor(PALETTE[5]);
+    setCategoryDialog(true);
+  }
+
+  function openEditCategory(category: CategoryDto) {
+    setEditingCategoryId(category.id);
+    setCategoryName(category.name);
+    setCategoryKind(category.kind);
+    setCategoryColor(category.color);
+    setCategoryDialog(true);
+  }
+
+  async function handleSubmitCategory() {
+    const editing = editingCategoryId;
     await run(
       async () => {
-        await api.post("/api/categories", {
-          name: categoryName.trim(),
-          kind: categoryKind,
-          color: categoryColor,
-        });
+        if (editing) {
+          // 分类类型决定其历史账目语义，创建后不可更改，编辑时只提交名称与颜色。
+          await api.patch(`/api/categories/${editing}`, {
+            name: categoryName.trim(),
+            color: categoryColor,
+          });
+        } else {
+          await api.post("/api/categories", {
+            name: categoryName.trim(),
+            kind: categoryKind,
+            color: categoryColor,
+          });
+        }
         setCategoryDialog(false);
         setCategoryName("");
+        setEditingCategoryId(null);
       },
-      "分类已创建",
+      editing ? "分类已更新" : "分类已创建",
       categories.reload,
     );
   }
 
-  async function handleCreateTag() {
+  function openCreateTag() {
+    setEditingTagId(null);
+    setTagName("");
+    setTagColor(PALETTE[3]);
+    setTagDialog(true);
+  }
+
+  function openEditTag(tag: TagDto) {
+    setEditingTagId(tag.id);
+    setTagName(tag.name);
+    setTagColor(tag.color);
+    setTagDialog(true);
+  }
+
+  async function handleSubmitTag() {
+    const editing = editingTagId;
     await run(
       async () => {
-        await api.post("/api/tags", { name: tagName.trim(), color: tagColor });
+        const body = { name: tagName.trim(), color: tagColor };
+        if (editing) {
+          await api.patch(`/api/tags/${editing}`, body);
+        } else {
+          await api.post("/api/tags", body);
+        }
+        setTagDialog(false);
         setTagName("");
+        setEditingTagId(null);
       },
-      "标签已创建",
+      editing ? "标签已更新" : "标签已创建",
       tags.reload,
     );
   }
@@ -266,9 +338,6 @@ export default function SettingsPage() {
 
       <Card>
         <CardContent className="flex items-center gap-3">
-          <span className="inline-flex size-11 items-center justify-center rounded-full bg-primary/10 font-heading text-base text-primary">
-            {(user?.nickname ?? "记").slice(0, 1)}
-          </span>
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium">{user?.nickname ?? "未登录"}</p>
             <p className="text-xs text-muted-foreground">
@@ -299,7 +368,7 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="accounts" className="mt-3 flex flex-col gap-3">
-          <Button size="sm" onClick={() => setAccountDialog(true)}>
+          <Button size="sm" onClick={openCreateAccount}>
             <Plus />
             新增账户
           </Button>
@@ -333,6 +402,15 @@ export default function SettingsPage() {
                     variant="ghost"
                     size="icon-sm"
                     disabled={busy}
+                    aria-label="编辑账户"
+                    onClick={() => openEditAccount(account)}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
                     aria-label={account.archived ? "恢复账户" : "归档账户"}
                     onClick={() =>
                       void run(
@@ -350,6 +428,25 @@ export default function SettingsPage() {
                   >
                     {account.archived ? <ArchiveRestore /> : <Archive />}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
+                    aria-label="删除账户"
+                    onClick={() => {
+                      if (!window.confirm(`确定删除账户「${account.name}」吗？`)) return;
+                      void run(
+                        () => api.delete(`/api/accounts/${account.id}`),
+                        "账户已删除",
+                        () => {
+                          accounts.reload();
+                          balances.reload();
+                        },
+                      );
+                    }}
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
               ))}
               {(accounts.data?.items ?? []).length === 0 ? (
@@ -360,7 +457,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="categories" className="mt-3 flex flex-col gap-3">
-          <Button size="sm" onClick={() => setCategoryDialog(true)}>
+          <Button size="sm" onClick={openCreateCategory}>
             <Plus />
             新增分类
           </Button>
@@ -393,24 +490,51 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   {category.system ? null : (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      disabled={busy}
-                      aria-label={category.archived ? "恢复分类" : "归档分类"}
-                      onClick={() =>
-                        void run(
-                          () =>
-                            api.patch(`/api/categories/${category.id}`, {
-                              archived: !category.archived,
-                            }),
-                          category.archived ? "分类已恢复" : "分类已归档",
-                          categories.reload,
-                        )
-                      }
-                    >
-                      {category.archived ? <ArchiveRestore /> : <Archive />}
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={busy}
+                        aria-label="编辑分类"
+                        onClick={() => openEditCategory(category)}
+                      >
+                        <Pencil />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={busy}
+                        aria-label={category.archived ? "恢复分类" : "归档分类"}
+                        onClick={() =>
+                          void run(
+                            () =>
+                              api.patch(`/api/categories/${category.id}`, {
+                                archived: !category.archived,
+                              }),
+                            category.archived ? "分类已恢复" : "分类已归档",
+                            categories.reload,
+                          )
+                        }
+                      >
+                        {category.archived ? <ArchiveRestore /> : <Archive />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={busy}
+                        aria-label="删除分类"
+                        onClick={() => {
+                          if (!window.confirm(`确定删除分类「${category.name}」吗？`)) return;
+                          void run(
+                            () => api.delete(`/api/categories/${category.id}`),
+                            "分类已删除",
+                            categories.reload,
+                          );
+                        }}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </>
                   )}
                 </div>
               ))}
@@ -419,27 +543,10 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="tags" className="mt-3 flex flex-col gap-3">
-          <div className="flex items-end gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="tagName">新标签</Label>
-              <Input
-                id="tagName"
-                maxLength={12}
-                placeholder="例如：出差"
-                value={tagName}
-                onChange={(event) => setTagName(event.target.value)}
-              />
-            </div>
-            <ColorPicker value={tagColor} onChange={setTagColor} label="标签颜色" />
-            <Button
-              size="sm"
-              disabled={busy || tagName.trim() === ""}
-              onClick={handleCreateTag}
-            >
-              <Plus />
-              添加
-            </Button>
-          </div>
+          <Button size="sm" onClick={openCreateTag}>
+            <Plus />
+            新增标签
+          </Button>
 
           {tags.loading ? (
             <LoadingBlock />
@@ -462,14 +569,24 @@ export default function SettingsPage() {
                     variant="ghost"
                     size="icon-sm"
                     disabled={busy}
+                    aria-label="编辑标签"
+                    onClick={() => openEditTag(tag)}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
                     aria-label="删除标签"
-                    onClick={() =>
+                    onClick={() => {
+                      if (!window.confirm(`确定删除标签「${tag.name}」吗？`)) return;
                       void run(
                         () => api.delete(`/api/tags/${tag.id}`),
                         "标签已删除",
                         tags.reload,
-                      )
-                    }
+                      );
+                    }}
                   >
                     <Trash2 />
                   </Button>
@@ -559,7 +676,7 @@ export default function SettingsPage() {
       <Dialog open={accountDialog} onOpenChange={setAccountDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>新增账户</DialogTitle>
+            <DialogTitle>{editingAccountId ? "编辑账户" : "新增账户"}</DialogTitle>
             <DialogDescription>账户用于区分资金去向，余额 = 初始余额 + 收入 - 支出</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -600,9 +717,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button disabled={busy || accountName.trim() === ""} onClick={handleCreateAccount}>
+            <Button disabled={busy || accountName.trim() === ""} onClick={handleSubmitAccount}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              创建
+              {editingAccountId ? "保存" : "创建"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -611,8 +728,12 @@ export default function SettingsPage() {
       <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>新增分类</DialogTitle>
-            <DialogDescription>系统内置分类不可修改，自建分类可随时归档</DialogDescription>
+            <DialogTitle>{editingCategoryId ? "编辑分类" : "新增分类"}</DialogTitle>
+            <DialogDescription>
+              {editingCategoryId
+                ? "分类类型创建后不可更改；如需更换类型请新建一个分类"
+                : "系统内置分类不可修改，自建分类可随时归档或删除"}
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
@@ -627,7 +748,11 @@ export default function SettingsPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>类型</Label>
-              <Select value={categoryKind} onValueChange={setCategoryKind}>
+              <Select
+                value={categoryKind}
+                onValueChange={setCategoryKind}
+                disabled={editingCategoryId !== null}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -640,9 +765,37 @@ export default function SettingsPage() {
             <ColorPicker value={categoryColor} onChange={setCategoryColor} label="分类颜色" />
           </div>
           <DialogFooter>
-            <Button disabled={busy || categoryName.trim() === ""} onClick={handleCreateCategory}>
+            <Button disabled={busy || categoryName.trim() === ""} onClick={handleSubmitCategory}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              创建
+              {editingCategoryId ? "保存" : "创建"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tagDialog} onOpenChange={setTagDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingTagId ? "编辑标签" : "新增标签"}</DialogTitle>
+            <DialogDescription>标签用于给账目加维度，例如「出差」「报销」</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tagName">名称</Label>
+              <Input
+                id="tagName"
+                maxLength={12}
+                value={tagName}
+                onChange={(event) => setTagName(event.target.value)}
+                placeholder="例如：出差"
+              />
+            </div>
+            <ColorPicker value={tagColor} onChange={setTagColor} label="标签颜色" />
+          </div>
+          <DialogFooter>
+            <Button disabled={busy || tagName.trim() === ""} onClick={handleSubmitTag}>
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              {editingTagId ? "保存" : "创建"}
             </Button>
           </DialogFooter>
         </DialogContent>

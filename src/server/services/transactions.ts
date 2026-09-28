@@ -165,6 +165,12 @@ export async function listTransactions(
     conditions.push(`t.account_id = ?`);
     params.push(query.accountId);
   }
+  if (query.tagId) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)`,
+    );
+    params.push(query.tagId);
+  }
   if (query.keyword) {
     conditions.push(`(t.note LIKE ? OR c.name LIKE ?)`);
     const like = `%${query.keyword}%`;
@@ -248,6 +254,50 @@ export async function createTransaction(
   return created;
 }
 
+/**
+ * 退款：为原支出生成一笔等额的收入记录，并给原支出打上 refunded_at 标记。
+ * 退款记录不关联分类（支出分类不能复用于收入），来源信息通过备注体现。
+ */
+export async function refundTransaction(
+  db: Db,
+  userId: string,
+  transactionId: string,
+  now = nowMs(),
+): Promise<{ refund: TransactionView; origin: TransactionView }> {
+  const origin = await getTransaction(db, userId, transactionId);
+  if (!origin) throw ApiError.notFound("账目不存在或已删除");
+  if (origin.kind !== "expense") throw ApiError.badRequest("只有支出账目支持退款");
+  if (origin.refund_of_id !== null) throw ApiError.badRequest("退款记录不支持再次退款");
+  if (origin.refunded_at !== null) throw ApiError.badRequest("该支出已退款");
+
+  const source = origin.note?.trim() || origin.category_name || "支出";
+  const note = `退款：${source}`.slice(0, 200);
+  const id = crypto.randomUUID();
+
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO transactions
+           (id, user_id, account_id, category_id, kind, amount_cents, currency, note,
+            happened_at, happened_on, transfer_peer_id, refund_of_id, refunded_at,
+            created_at, updated_at, deleted_at)
+         VALUES (?, ?, ?, NULL, 'income', ?, 'CNY', ?, ?, ?, NULL, ?, NULL, ?, ?, NULL)`,
+      )
+      .bind(id, userId, origin.account_id, origin.amount_cents, note, now, todayInBusinessTimezone(now), origin.id, now, now),
+    db
+      .prepare(
+        `UPDATE transactions SET refunded_at = ?, updated_at = ?
+          WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      )
+      .bind(now, now, origin.id, userId),
+  ]);
+
+  const refund = await getTransaction(db, userId, id);
+  const updatedOrigin = await getTransaction(db, userId, origin.id);
+  if (!refund || !updatedOrigin) throw ApiError.internal("退款失败");
+  return { refund, origin: updatedOrigin };
+}
+
 export async function updateTransaction(
   db: Db,
   userId: string,
@@ -257,6 +307,20 @@ export async function updateTransaction(
 ): Promise<TransactionView> {
   const existing = await getTransaction(db, userId, transactionId);
   if (!existing) throw ApiError.notFound("账目不存在或已删除");
+
+  if (existing.refund_of_id !== null) {
+    throw ApiError.badRequest("退款记录不支持编辑");
+  }
+  if (
+    existing.refunded_at !== null &&
+    (input.kind !== undefined ||
+      input.amount !== undefined ||
+      input.categoryId !== undefined ||
+      input.accountId !== undefined ||
+      input.happenedOn !== undefined)
+  ) {
+    throw ApiError.badRequest("已退款的支出不支持修改金额、类型、分类、账户或日期");
+  }
 
   const nextKind = input.kind ?? existing.kind;
 
@@ -311,15 +375,39 @@ export async function deleteTransaction(
   transactionId: string,
   now = nowMs(),
 ): Promise<void> {
-  const result = await db
-    .prepare(
-      `UPDATE transactions SET deleted_at = ?, updated_at = ?
-        WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
-    )
-    .bind(now, now, transactionId, userId)
-    .run();
+  const existing = await getTransaction(db, userId, transactionId);
+  if (!existing) throw ApiError.notFound("账目不存在或已删除");
 
-  if ((result.meta?.changes ?? 0) === 0) {
+  const statements = [
+    db
+      .prepare(
+        `UPDATE transactions SET deleted_at = ?, updated_at = ?
+          WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      )
+      .bind(now, now, transactionId, userId),
+  ];
+
+  if (existing.refund_of_id) {
+    // 删除退款记录时同步撤销原支出的「已退款」标记，允许重新退款
+    statements.push(
+      db
+        .prepare(`UPDATE transactions SET refunded_at = NULL, updated_at = ? WHERE id = ? AND user_id = ?`)
+        .bind(now, existing.refund_of_id, userId),
+    );
+  } else if (existing.refunded_at !== null) {
+    // 删除已退款的支出时，连带删除对应的退款记录，避免留下孤立收入
+    statements.push(
+      db
+        .prepare(
+          `UPDATE transactions SET deleted_at = ?, updated_at = ?
+            WHERE user_id = ? AND refund_of_id = ? AND deleted_at IS NULL`,
+        )
+        .bind(now, now, userId, transactionId),
+    );
+  }
+
+  const results = await db.batch(statements);
+  if ((results[0]?.meta?.changes ?? 0) === 0) {
     throw ApiError.notFound("账目不存在或已删除");
   }
 }

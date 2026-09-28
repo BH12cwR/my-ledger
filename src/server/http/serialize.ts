@@ -145,6 +145,10 @@ export interface TransactionDto {
   accountName: string | null;
   accountType: string | null;
   tags: string[];
+  /** 该笔支出被退款的时间戳；未退款为 null */
+  refundedAt: number | null;
+  /** 退款记录指向的原始支出 id；普通账目为 null */
+  refundOfId: string | null;
   /** 仅管理端查询携带 */
   userId?: string;
   userNickname?: string | null;
@@ -168,6 +172,8 @@ export function transactionDto(view: TransactionView): TransactionDto {
     accountName: view.account_name,
     accountType: view.account_type,
     tags: view.tags,
+    refundedAt: view.refunded_at,
+    refundOfId: view.refund_of_id,
     createdAt: view.created_at,
   };
   if (view.user_nickname !== undefined) {

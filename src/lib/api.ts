@@ -65,10 +65,13 @@ export type TrendResponse =
   | { granularity: "day"; from: string; to: string; points: TrendPoint[] }
   | { granularity: "month"; points: TrendPoint[] };
 
+export type CategoryBreakdownDimension = "category" | "tag";
+
 export interface CategoryBreakdownResponse {
   from: string;
   to: string;
   kind: "expense" | "income";
+  dimension: CategoryBreakdownDimension;
   totalCents: number;
   items: CategoryBreakdownItem[];
 }

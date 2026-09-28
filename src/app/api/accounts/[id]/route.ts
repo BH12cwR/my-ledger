@@ -5,7 +5,7 @@ import { ApiError } from "@/server/http/errors";
 import { requireUser } from "@/server/auth/guard";
 import { accountDto } from "@/server/http/serialize";
 import { patchAccountSchema } from "@/server/validation/schemas";
-import { archiveAccount, getAccount, updateAccount } from "@/server/services/accounts";
+import { archiveAccount, deleteAccount, getAccount, updateAccount } from "@/server/services/accounts";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -46,15 +46,15 @@ export async function PATCH(request: Request, context: RouteContext) {
   });
 }
 
-/** DELETE /api/accounts/:id —— 语义为归档，历史账目仍保留归属 */
+/** DELETE /api/accounts/:id —— 无关联账目时物理删除 */
 export async function DELETE(request: Request, context: RouteContext) {
   return handleRoute(async () => {
     const deps = defaultDeps();
     const auth = await requireUser(request, deps);
 
     const id = pathParam((await context.params).id, "账户标识");
-    const account = await archiveAccount(deps.db, auth.principalId, id, true);
+    await deleteAccount(deps.db, auth.principalId, id);
 
-    return jsonOk({ account: accountDto(account) });
+    return jsonOk({ ok: true });
   });
 }

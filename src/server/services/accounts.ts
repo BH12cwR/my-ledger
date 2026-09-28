@@ -3,7 +3,7 @@ import { ApiError } from "../http/errors";
 import { allRows, nowMs, toCents } from "./common";
 import type { CreateAccountInput, UpdateAccountInput } from "../validation/schemas";
 
-/** 资金账户服务：账户不做物理删除，只归档，避免历史账目失去归属 */
+/** 资金账户服务：有历史账目的账户只归档，无关联账目的账户可物理删除 */
 
 export async function listAccounts(
   db: Db,
@@ -129,4 +129,23 @@ export async function archiveAccount(
   const updated = await getAccount(db, userId, accountId);
   if (!updated) throw ApiError.internal("更新账户状态失败");
   return updated;
+}
+
+/** 物理删除：仅当账户下没有未删除的账目时才允许，否则会破坏历史账目归属 */
+export async function deleteAccount(db: Db, userId: string, accountId: string): Promise<void> {
+  const existing = await getAccount(db, userId, accountId);
+  if (!existing) throw ApiError.notFound("账户不存在");
+
+  const linked = await db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM transactions
+        WHERE user_id = ? AND account_id = ? AND deleted_at IS NULL`,
+    )
+    .bind(userId, accountId)
+    .first<{ count: number }>();
+  if ((linked?.count ?? 0) > 0) {
+    throw ApiError.badRequest("该账户下存在账目记录，无法删除；可改为归档");
+  }
+
+  await db.prepare(`DELETE FROM accounts WHERE id = ? AND user_id = ?`).bind(accountId, userId).run();
 }

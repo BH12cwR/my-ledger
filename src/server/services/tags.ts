@@ -91,9 +91,21 @@ export async function updateTag(
 }
 
 export async function deleteTag(db: Db, userId: string, tagId: string): Promise<void> {
-  const result = await db
-    .prepare(`DELETE FROM tags WHERE id = ? AND user_id = ?`)
+  const existing = await getTag(db, userId, tagId);
+  if (!existing) throw ApiError.notFound("标签不存在");
+
+  const linked = await db
+    .prepare(
+      `SELECT COUNT(*) AS count
+         FROM transaction_tags tt
+         JOIN transactions t ON t.id = tt.transaction_id
+        WHERE tt.tag_id = ? AND t.user_id = ? AND t.deleted_at IS NULL`,
+    )
     .bind(tagId, userId)
-    .run();
-  if ((result.meta?.changes ?? 0) === 0) throw ApiError.notFound("标签不存在");
+    .first<{ count: number }>();
+  if ((linked?.count ?? 0) > 0) {
+    throw ApiError.badRequest("该标签已被账目使用，无法删除");
+  }
+
+  await db.prepare(`DELETE FROM tags WHERE id = ? AND user_id = ?`).bind(tagId, userId).run();
 }

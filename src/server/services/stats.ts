@@ -30,13 +30,23 @@ export interface TrendPoint {
 }
 
 export interface CategoryBreakdownItem {
-  categoryId: string | null;
+  /** 分类 id 或标签 id；未分类/未打标签时为 null */
+  id: string | null;
   name: string;
   icon: string;
   color: string;
   amountCents: number;
   transactionCount: number;
   percentage: number;
+}
+
+export interface CategoryBreakdownResult {
+  from: string;
+  to: string;
+  kind: "expense" | "income";
+  dimension: "category" | "tag";
+  totalCents: number;
+  items: CategoryBreakdownItem[];
 }
 
 export interface AccountBalanceItem {
@@ -48,24 +58,59 @@ export interface AccountBalanceItem {
   transactionCount: number;
 }
 
+/** 统计筛选条件：时间区间 + 可选的分类 / 标签过滤 */
+interface StatsFilter {
+  from?: string;
+  to?: string;
+  categoryId?: string;
+  tagId?: string;
+}
+
+/** 统一拼装统计查询的 WHERE 条件，保证各聚合口径一致 */
+function appendFilters(
+  conditions: string[],
+  params: unknown[],
+  userId: string,
+  from: string,
+  to: string,
+  filter: { categoryId?: string; tagId?: string } = {},
+): void {
+  conditions.push(`t.user_id = ?`, `t.deleted_at IS NULL`, `t.happened_on BETWEEN ? AND ?`);
+  params.push(userId, from, to);
+  if (filter.categoryId) {
+    conditions.push(`t.category_id = ?`);
+    params.push(filter.categoryId);
+  }
+  if (filter.tagId) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)`,
+    );
+    params.push(filter.tagId);
+  }
+}
+
 export async function getSummary(
   db: Db,
   userId: string,
-  range: { from?: string; to?: string } = {},
+  range: StatsFilter = {},
 ): Promise<SummaryResult> {
   const { from, to } = resolveDayRange(range.from, range.to);
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  appendFilters(conditions, params, userId, from, to, range);
 
   const row = await db
     .prepare(
       `SELECT
-         COALESCE(SUM(CASE WHEN kind = 'income'  THEN amount_cents ELSE 0 END), 0) AS income_cents,
-         COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense_cents,
+         COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
+         COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents,
          COUNT(*) AS transaction_count,
-         COALESCE(SUM(CASE WHEN kind = 'expense' THEN 1 ELSE 0 END), 0) AS expense_count
-       FROM transactions
-       WHERE user_id = ? AND deleted_at IS NULL AND happened_on BETWEEN ? AND ?`,
+         COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS expense_count
+       FROM transactions t
+       WHERE ${conditions.join(" AND ")}`,
     )
-    .bind(userId, from, to)
+    .bind(...params)
     .first<{
       income_cents: number;
       expense_cents: number;
@@ -95,22 +140,26 @@ export async function getSummary(
 export async function getDailyTrend(
   db: Db,
   userId: string,
-  range: { from?: string; to?: string } = {},
+  range: StatsFilter = {},
 ): Promise<{ from: string; to: string; points: TrendPoint[] }> {
   const { from, to } = resolveDayRange(range.from, range.to);
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  appendFilters(conditions, params, userId, from, to, range);
 
   const rows = await allRows<{ day: string; income_cents: number; expense_cents: number }>(
     db
       .prepare(
-        `SELECT happened_on AS day,
-                COALESCE(SUM(CASE WHEN kind = 'income'  THEN amount_cents ELSE 0 END), 0) AS income_cents,
-                COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense_cents
-           FROM transactions
-          WHERE user_id = ? AND deleted_at IS NULL AND happened_on BETWEEN ? AND ?
-          GROUP BY happened_on
-          ORDER BY happened_on ASC`,
+        `SELECT t.happened_on AS day,
+                COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
+                COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents
+           FROM transactions t
+          WHERE ${conditions.join(" AND ")}
+          GROUP BY t.happened_on
+          ORDER BY t.happened_on ASC`,
       )
-      .bind(userId, from, to),
+      .bind(...params),
   );
 
   const byDay = new Map(rows.map((row) => [row.day, row]));
@@ -132,22 +181,26 @@ export async function getDailyTrend(
 export async function getMonthlyTrend(
   db: Db,
   userId: string,
-  range: { from?: string; to?: string } = {},
+  range: StatsFilter = {},
 ): Promise<TrendPoint[]> {
   const { from, to } = resolveDayRange(range.from, range.to);
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  appendFilters(conditions, params, userId, from, to, range);
 
   const rows = await allRows<{ month: string; income_cents: number; expense_cents: number }>(
     db
       .prepare(
-        `SELECT substr(happened_on, 1, 7) AS month,
-                COALESCE(SUM(CASE WHEN kind = 'income'  THEN amount_cents ELSE 0 END), 0) AS income_cents,
-                COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense_cents
-           FROM transactions
-          WHERE user_id = ? AND deleted_at IS NULL AND happened_on BETWEEN ? AND ?
+        `SELECT substr(t.happened_on, 1, 7) AS month,
+                COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
+                COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents
+           FROM transactions t
+          WHERE ${conditions.join(" AND ")}
           GROUP BY month
           ORDER BY month ASC`,
       )
-      .bind(userId, from, to),
+      .bind(...params),
   );
 
   return rows.map((row) => ({
@@ -162,13 +215,65 @@ export async function getMonthlyTrend(
 export async function getCategoryBreakdown(
   db: Db,
   userId: string,
-  options: { from?: string; to?: string; kind?: "expense" | "income" } = {},
-): Promise<{ from: string; to: string; kind: "expense" | "income"; totalCents: number; items: CategoryBreakdownItem[] }> {
+  options: StatsFilter & { kind?: "expense" | "income"; dimension?: "category" | "tag" } = {},
+): Promise<CategoryBreakdownResult> {
   const { from, to } = resolveDayRange(options.from, options.to);
   const kind = options.kind ?? "expense";
+  const dimension = options.dimension ?? "category";
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  appendFilters(conditions, params, userId, from, to, options);
+  conditions.push(`t.kind = ?`);
+  params.push(kind);
+  const where = conditions.join(" AND ");
+
+  if (dimension === "tag") {
+    const rows = await allRows<{
+      id: string | null;
+      name: string | null;
+      color: string | null;
+      amount_cents: number;
+      transaction_count: number;
+    }>(
+      db
+        .prepare(
+          `SELECT tg.id   AS id,
+                  tg.name AS name,
+                  tg.color AS color,
+                  COALESCE(SUM(t.amount_cents), 0) AS amount_cents,
+                  COUNT(DISTINCT t.id) AS transaction_count
+             FROM transactions t
+             LEFT JOIN transaction_tags tt ON tt.transaction_id = t.id
+             LEFT JOIN tags tg ON tg.id = tt.tag_id
+            WHERE ${where}
+            GROUP BY tg.id
+            ORDER BY amount_cents DESC`,
+        )
+        .bind(...params),
+    );
+
+    const totalCents = rows.reduce((sum, row) => sum + row.amount_cents, 0);
+    return {
+      from,
+      to,
+      kind,
+      dimension,
+      totalCents,
+      items: rows.map((row) => ({
+        id: row.id,
+        name: row.name ?? "未打标签",
+        icon: "tag",
+        color: row.color ?? "#94a3b8",
+        amountCents: row.amount_cents,
+        transactionCount: row.transaction_count,
+        percentage: shareOfTotal(row.amount_cents, totalCents),
+      })),
+    };
+  }
 
   const rows = await allRows<{
-    category_id: string | null;
+    id: string | null;
     name: string | null;
     icon: string | null;
     color: string | null;
@@ -177,7 +282,7 @@ export async function getCategoryBreakdown(
   }>(
     db
       .prepare(
-        `SELECT t.category_id AS category_id,
+        `SELECT t.category_id AS id,
                 c.name  AS name,
                 c.icon  AS icon,
                 c.color AS color,
@@ -185,12 +290,11 @@ export async function getCategoryBreakdown(
                 COUNT(*) AS transaction_count
            FROM transactions t
            LEFT JOIN categories c ON c.id = t.category_id
-          WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.kind = ?
-            AND t.happened_on BETWEEN ? AND ?
+          WHERE ${where}
           GROUP BY t.category_id
           ORDER BY amount_cents DESC`,
       )
-      .bind(userId, kind, from, to),
+      .bind(...params),
   );
 
   const totalCents = rows.reduce((sum, row) => sum + row.amount_cents, 0);
@@ -199,9 +303,10 @@ export async function getCategoryBreakdown(
     from,
     to,
     kind,
+    dimension,
     totalCents,
     items: rows.map((row) => ({
-      categoryId: row.category_id,
+      id: row.id,
       name: row.name ?? "未分类",
       icon: row.icon ?? "circle-help",
       color: row.color ?? "#94a3b8",

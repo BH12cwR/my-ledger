@@ -5,7 +5,7 @@ import { ApiError } from "@/server/http/errors";
 import { requireUser } from "@/server/auth/guard";
 import { categoryDto } from "@/server/http/serialize";
 import { patchCategorySchema } from "@/server/validation/schemas";
-import { archiveCategory, getCategory, updateCategory } from "@/server/services/categories";
+import { archiveCategory, deleteCategory, getCategory, updateCategory } from "@/server/services/categories";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -32,15 +32,15 @@ export async function PATCH(request: Request, context: RouteContext) {
   });
 }
 
-/** DELETE /api/categories/:id —— 语义为归档 */
+/** DELETE /api/categories/:id —— 无关联账目时物理删除；系统内置分类返回 404 */
 export async function DELETE(request: Request, context: RouteContext) {
   return handleRoute(async () => {
     const deps = defaultDeps();
     const auth = await requireUser(request, deps);
 
     const id = pathParam((await context.params).id, "分类标识");
-    const category = await archiveCategory(deps.db, auth.principalId, id, true);
+    await deleteCategory(deps.db, auth.principalId, id);
 
-    return jsonOk({ category: categoryDto(category) });
+    return jsonOk({ ok: true });
   });
 }

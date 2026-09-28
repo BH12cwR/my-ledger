@@ -8,9 +8,8 @@ import { CategoryIcon } from "@/components/category-icon";
 import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
 import { TransactionRow } from "@/components/transaction-row";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useSession } from "@/components/providers/session-provider";
 import { useApiQuery } from "@/lib/hooks";
 import type { DashboardOverview, Paginated, TransactionDto } from "@/lib/api";
 import { money, monthLabel } from "@/lib/format";
@@ -25,7 +24,6 @@ const RECENT_PATH = "/api/transactions?pageSize=5";
  * 所有金额都是「分」，展示前统一交给 money() 格式化。
  */
 export default function HomePage() {
-  const { user } = useSession();
   const router = useRouter();
   const overview = useApiQuery<DashboardOverview>(OVERVIEW_PATH);
   const recent = useApiQuery<Paginated<TransactionDto>>(RECENT_PATH);
@@ -55,12 +53,9 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">
-            你好，{user?.nickname ?? "记账人"}
-          </p>
-          <h1 className="font-heading text-lg font-semibold">今天也要好好记账</h1>
-        </div>
+        <h1 className="min-w-0 truncate font-heading text-lg font-semibold">
+          今天也要好好记账
+        </h1>
         <Button asChild size="sm">
           <Link href="/transactions/new">
             <Plus />
@@ -70,14 +65,16 @@ export default function HomePage() {
       </header>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader>
           <CardTitle>预算</CardTitle>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/settings">
-              管理
-              <ArrowRight />
-            </Link>
-          </Button>
+          <CardAction>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/settings">
+                管理
+                <ArrowRight />
+              </Link>
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {budgets.length === 0 ? (
@@ -156,14 +153,16 @@ export default function HomePage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader>
           <CardTitle>本月支出 Top 5</CardTitle>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/stats">
-              统计
-              <ArrowRight />
-            </Link>
-          </Button>
+          <CardAction>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/stats">
+                统计
+                <ArrowRight />
+              </Link>
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {topCategories.length === 0 ? (
@@ -172,7 +171,7 @@ export default function HomePage() {
             </p>
           ) : (
             topCategories.map((item) => (
-              <div key={item.categoryId ?? "uncategorized"} className="flex flex-col gap-1.5">
+              <div key={item.id ?? item.name} className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
                   <CategoryIcon name={item.icon} color={item.color} />
                   <span className="flex-1 truncate text-sm">{item.name}</span>
@@ -189,14 +188,16 @@ export default function HomePage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader>
           <CardTitle>最近账目</CardTitle>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/transactions">
-              全部
-              <ArrowRight />
-            </Link>
-          </Button>
+          <CardAction>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/transactions">
+                全部
+                <ArrowRight />
+              </Link>
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent>
           {recent.loading ? (

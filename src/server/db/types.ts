@@ -146,6 +146,10 @@ export interface TransactionRecord {
   happened_at: number;
   happened_on: string;
   transfer_peer_id: string | null;
+  /** 退款记录指向被退款的原始支出；普通账目为 NULL */
+  refund_of_id: string | null;
+  /** 该笔支出已被退款的时间戳；未退款为 NULL */
+  refunded_at: number | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;

@@ -137,6 +137,24 @@ export async function archiveCategory(
   return updated;
 }
 
+/** 物理删除：仅当没有未删除的账目引用该分类时才允许；系统内置分类不可删除 */
+export async function deleteCategory(db: Db, userId: string, categoryId: string): Promise<void> {
+  await getOwnCategory(db, userId, categoryId);
+
+  const linked = await db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM transactions
+        WHERE user_id = ? AND category_id = ? AND deleted_at IS NULL`,
+    )
+    .bind(userId, categoryId)
+    .first<{ count: number }>();
+  if ((linked?.count ?? 0) > 0) {
+    throw ApiError.badRequest("该分类下存在账目记录，无法删除；可改为归档");
+  }
+
+  await db.prepare(`DELETE FROM categories WHERE id = ? AND user_id = ?`).bind(categoryId, userId).run();
+}
+
 /** 校验账目引用的分类对当前用户可见，防止越权引用他人分类 */
 export async function assertCategoryAccessible(
   db: Db,
