@@ -107,6 +107,23 @@ export const patchCategorySchema = updateCategorySchema.extend({
   archived: z.boolean().optional(),
 });
 
+/** 预算周期：monthly 自然月 / yearly 自然年 */
+export const budgetPeriodSchema = z.enum(["monthly", "yearly"], {
+  message: "预算周期只能是 monthly / yearly",
+});
+
+/** categoryId 省略或为 null 表示「总预算」，否则为某个支出分类的预算 */
+export const createBudgetSchema = z.object({
+  categoryId: optionalId,
+  period: budgetPeriodSchema.default("monthly"),
+  amount: amountSchema,
+});
+
+/** 编辑预算只调整限额；如需改变范围（周期 / 分类）请删除后重建 */
+export const updateBudgetSchema = z.object({
+  amount: amountSchema,
+});
+
 /** 只关心时间区间的查询（概览、余额等不需要 kind） */
 export const rangeQuerySchema = z.object({
   from: daySchema.optional(),
@@ -207,6 +224,8 @@ export type CreateTagInput = z.infer<typeof createTagSchema>;
 export type UpdateTagInput = z.infer<typeof updateTagSchema>;
 export type PatchAccountInput = z.infer<typeof patchAccountSchema>;
 export type PatchCategoryInput = z.infer<typeof patchCategorySchema>;
+export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
+export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 export type RangeQuery = z.infer<typeof rangeQuerySchema>;
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 export type UserLoginInput = z.infer<typeof userLoginSchema>;

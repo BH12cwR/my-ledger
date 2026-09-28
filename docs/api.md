@@ -356,13 +356,14 @@
 
 ### `GET /api/stats/overview`
 
-首页一次性拿到三块聚合数据（本月 / 今日 / 本月支出 Top5）。
+首页一次性拿到四块聚合数据（本月 / 今日 / 本月支出 Top5 / 预算用量）。
 
 ```jsonc
 { "data": {
   "month": SummaryResult,
   "today": SummaryResult,
-  "topCategories": CategoryBreakdownItem[]   // 最多 5 条
+  "topCategories": CategoryBreakdownItem[],   // 最多 5 条
+  "budgets": BudgetView[]                     // 同 GET /api/budgets 的 items
 } }
 ```
 
@@ -379,7 +380,53 @@
 
 ---
 
-## 8. 管理端鉴权
+## 8. 预算（用户端）
+
+预算是一条**按自然月 / 自然年循环生效**的限额，不按周期存多行；当前周期的已用金额在查询时实时聚合，只统计 `kind = 'expense'` 且未软删除的账目。
+
+`categoryId` 为 `null` 时表示**总预算**（该周期全部支出），否则为某个**支出分类**的预算。同一用户在同一周期下，同一范围（总预算或某分类）只允许一条，重复创建返回 409。
+
+### `GET /api/budgets` → `{ "data": { "items": BudgetView[] } }`
+
+总预算排在前面，其次按月 / 年与创建时间升序。
+
+```jsonc
+{ "id": "uuid",
+  "categoryId": null,              // null 即总预算
+  "categoryName": null, "categoryIcon": null, "categoryColor": null,
+  "period": "monthly",             // monthly 自然月 | yearly 自然年
+  "amountCents": 200000,
+  "periodStart": "2026-09-01",     // 当前周期起（含）
+  "periodEnd": "2026-09-15",       // 当前周期止，等于今天（UTC+8）
+  "spentCents": 40000,
+  "remainingCents": 160000,        // 超支时为负
+  "percentage": 20                 // 已用百分比，超支可大于 100
+}
+```
+
+### `POST /api/budgets`
+
+```jsonc
+{
+  "categoryId": "cat_sys_expense_food",  // 可选，省略或 null = 总预算；分类必须属于当前用户且为支出分类
+  "period": "monthly",                   // 可选，默认 monthly
+  "amount": "2000.00"                    // 必填，最多两位小数的正数
+}
+```
+
+返回 201 `{ "data": { "budget": BudgetConfigDto } }`。`BudgetConfigDto` 为 `BudgetView` 去掉用量字段（`periodStart` / `periodEnd` / `spentCents` / `remainingCents` / `percentage`）。
+
+### `PATCH /api/budgets/:id`
+
+**仅可调整额度**：`{ "amount": "3000.00" }`。如需改变周期或分类，请删除后重建。
+
+### `DELETE /api/budgets/:id`
+
+**物理删除**（预算无历史追溯需求）。删除后可重建同范围预算。
+
+---
+
+## 9. 管理端鉴权
 
 > 以下接口全部需要 `ledger_admin_session`。用户端 Cookie 对后台完全无效。
 
@@ -415,7 +462,7 @@
 
 ---
 
-## 9. 管理端监控
+## 10. 管理端监控
 
 ### `GET /api/admin/metrics/overview?days=7`
 
@@ -444,7 +491,7 @@
 
 ---
 
-## 10. 管理端治理
+## 11. 管理端治理
 
 ### `GET /api/admin/users?keyword=&status=&page=&pageSize=`
 
@@ -502,7 +549,7 @@
 
 ---
 
-## 11. 前端调用示例
+## 12. 前端调用示例
 
 ```ts
 import { api, buildQuery, errorMessage, type Paginated, type TransactionDto } from "@/lib/api";

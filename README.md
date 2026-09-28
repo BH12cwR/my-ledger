@@ -1,4 +1,4 @@
-# 轻记账 · my-ledger
+# 账本 · my-ledger
 
 一款部署在 Cloudflare 上的**双端记账应用**：移动优先的用户端记账 PWA + `/admin` 下的平台监控与治理后台。
 

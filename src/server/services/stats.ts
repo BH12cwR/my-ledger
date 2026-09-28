@@ -1,6 +1,7 @@
 import type { Db } from "../db/types";
 import { resolveDayRange, shiftDay, todayInBusinessTimezone } from "@/lib/dates";
 import { allRows, shareOfTotal } from "./common";
+import { getBudgetOverview } from "./budgets";
 
 /**
  * 统计服务。
@@ -262,20 +263,22 @@ export async function getAccountBalances(
   }));
 }
 
-/** 首页概览：本月与今日的关键指标 */
+/** 首页概览：本月与今日的关键指标，以及当前周期的预算使用情况 */
 export async function getDashboardOverview(db: Db, userId: string) {
   const today = todayInBusinessTimezone();
   const monthStart = `${today.slice(0, 7)}-01`;
 
-  const [month, todaySummary, breakdown] = await Promise.all([
+  const [month, todaySummary, breakdown, budgets] = await Promise.all([
     getSummary(db, userId, { from: monthStart, to: today }),
     getSummary(db, userId, { from: today, to: today }),
     getCategoryBreakdown(db, userId, { from: monthStart, to: today, kind: "expense" }),
+    getBudgetOverview(db, userId, today),
   ]);
 
   return {
     month,
     today: todaySummary,
     topCategories: breakdown.items.slice(0, 5),
+    budgets,
   };
 }

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, Loader2, LogOut, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Loader2, LogOut, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
 import { CategoryIcon } from "@/components/category-icon";
 import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
 import { useSession } from "@/components/providers/session-provider";
@@ -34,6 +35,7 @@ import {
   errorMessage,
   type AccountBalanceItem,
   type AccountDto,
+  type BudgetView,
   type CategoryDto,
   type TagDto,
 } from "@/lib/api";
@@ -62,6 +64,9 @@ const PALETTE = [
   "#ec4899",
 ];
 
+/** 「总预算」在下拉框中的哨兵值：Radix Select 不允许空字符串 value */
+const TOTAL_SCOPE = "__total__";
+
 /**
  * 「我的」页：账户 / 分类 / 标签的个人化配置 + 退出登录。
  *
@@ -83,6 +88,7 @@ export default function SettingsPage() {
     `/api/categories?includeArchived=true`,
   );
   const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
+  const budgets = useApiQuery<{ items: BudgetView[] }>("/api/budgets");
 
   const [accountDialog, setAccountDialog] = useState(false);
   const [accountName, setAccountName] = useState("");
@@ -94,9 +100,18 @@ export default function SettingsPage() {
   const [categoryColor, setCategoryColor] = useState(PALETTE[5]);
   const [tagName, setTagName] = useState("");
   const [tagColor, setTagColor] = useState(PALETTE[3]);
+  const [budgetDialog, setBudgetDialog] = useState(false);
+  const [budgetScope, setBudgetScope] = useState<string>(TOTAL_SCOPE);
+  const [budgetPeriod, setBudgetPeriod] = useState<string>("monthly");
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const balanceById = new Map((balances.data?.items ?? []).map((item) => [item.id, item]));
+  // 预算只能落在支出分类上；正在编辑的预算若已被归档，仍保留在选项里以免下拉框失配
+  const expenseCategories = (categories.data?.items ?? []).filter(
+    (item) => item.kind === "expense" && (!item.archived || item.id === budgetScope),
+  );
 
   /**
    * 账户余额由 /api/stats/accounts 单独计算（初始余额 + 收入 - 支出），
@@ -192,6 +207,53 @@ export default function SettingsPage() {
     );
   }
 
+  function openCreateBudget() {
+    setEditingBudgetId(null);
+    setBudgetScope(TOTAL_SCOPE);
+    setBudgetPeriod("monthly");
+    setBudgetAmount("");
+    setBudgetDialog(true);
+  }
+
+  function openEditBudget(budget: BudgetView) {
+    setEditingBudgetId(budget.id);
+    setBudgetScope(budget.categoryId ?? TOTAL_SCOPE);
+    setBudgetPeriod(budget.period);
+    setBudgetAmount(centsToInputValue(budget.amountCents));
+    setBudgetDialog(true);
+  }
+
+  async function handleSubmitBudget() {
+    // 与账户初始余额同理：先把输入归一到「元」字符串，避免后端二次换算放大 100 倍。
+    let amount: string;
+    try {
+      amount = centsToInputValue(parseAmountToCents(budgetAmount));
+    } catch (error) {
+      toast.error(errorMessage(error));
+      return;
+    }
+
+    const editing = editingBudgetId;
+    await run(
+      async () => {
+        if (editing) {
+          await api.patch(`/api/budgets/${editing}`, { amount });
+        } else {
+          await api.post("/api/budgets", {
+            categoryId: budgetScope === TOTAL_SCOPE ? null : budgetScope,
+            period: budgetPeriod,
+            amount,
+          });
+        }
+        setBudgetDialog(false);
+        setBudgetAmount("");
+        setEditingBudgetId(null);
+      },
+      editing ? "预算已更新" : "预算已创建",
+      budgets.reload,
+    );
+  }
+
   async function handleLogout() {
     await logout();
     toast.success("已退出登录");
@@ -233,6 +295,7 @@ export default function SettingsPage() {
           <TabsTrigger value="accounts">账户</TabsTrigger>
           <TabsTrigger value="categories">分类</TabsTrigger>
           <TabsTrigger value="tags">标签</TabsTrigger>
+          <TabsTrigger value="budgets">预算</TabsTrigger>
         </TabsList>
 
         <TabsContent value="accounts" className="mt-3 flex flex-col gap-3">
@@ -415,6 +478,82 @@ export default function SettingsPage() {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="budgets" className="mt-3 flex flex-col gap-3">
+          <Button size="sm" onClick={openCreateBudget}>
+            <Plus />
+            设置预算
+          </Button>
+          {budgets.loading ? (
+            <LoadingBlock />
+          ) : (budgets.data?.items ?? []).length === 0 ? (
+            <EmptyBlock
+              title="还没有预算"
+              description="为每月或每年的支出设定额度，首页会实时展示使用进度"
+            />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {(budgets.data?.items ?? []).map((budget) => (
+                <div
+                  key={budget.id}
+                  className="flex flex-col gap-2 rounded-xl border border-border/60 px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <CategoryIcon
+                      name={budget.categoryIcon ?? "wallet"}
+                      color={budget.categoryColor}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {budget.categoryName ?? "总预算"}
+                    </span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {budgetPeriodLabel(budget.period)}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={busy}
+                      aria-label="编辑预算"
+                      onClick={() => openEditBudget(budget)}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={busy}
+                      aria-label="删除预算"
+                      onClick={() =>
+                        void run(
+                          () => api.delete(`/api/budgets/${budget.id}`),
+                          "预算已删除",
+                          budgets.reload,
+                        )
+                      }
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                  <BudgetProgress percentage={budget.percentage} />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="font-mono tabular-nums">
+                      {money(budget.spentCents)} / {money(budget.amountCents)}
+                    </span>
+                    <span
+                      className={
+                        budget.remainingCents < 0 ? "text-rose-600 dark:text-rose-400" : ""
+                      }
+                    >
+                      {budget.remainingCents < 0
+                        ? `超支 ${money(-budget.remainingCents)}`
+                        : `剩余 ${money(budget.remainingCents)}`}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       <Dialog open={accountDialog} onOpenChange={setAccountDialog}>
@@ -504,6 +643,72 @@ export default function SettingsPage() {
             <Button disabled={busy || categoryName.trim() === ""} onClick={handleCreateCategory}>
               {busy ? <Loader2 className="animate-spin" /> : null}
               创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={budgetDialog} onOpenChange={setBudgetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingBudgetId ? "编辑预算" : "设置预算"}</DialogTitle>
+            <DialogDescription>
+              {editingBudgetId
+                ? "仅可调整额度；如需更换周期或分类，请删除后重新设置"
+                : "额度为该周期内的支出上限，首页会实时展示使用进度"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>范围</Label>
+              <Select value={budgetScope} onValueChange={setBudgetScope} disabled={editingBudgetId !== null}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TOTAL_SCOPE}>总预算（全部支出）</SelectItem>
+                  {expenseCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>周期</Label>
+              <Select
+                value={budgetPeriod}
+                onValueChange={setBudgetPeriod}
+                disabled={editingBudgetId !== null}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">每月</SelectItem>
+                  <SelectItem value="yearly">每年</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="budgetAmount">额度</Label>
+              <Input
+                id="budgetAmount"
+                inputMode="decimal"
+                value={budgetAmount}
+                onChange={(event) => setBudgetAmount(event.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={busy || budgetAmount.trim() === ""}
+              onClick={handleSubmitBudget}
+            >
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              {editingBudgetId ? "保存" : "创建"}
             </Button>
           </DialogFooter>
         </DialogContent>

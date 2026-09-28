@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Plus } from "lucide-react";
+import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
 import { CategoryIcon } from "@/components/category-icon";
 import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
 import { TransactionRow } from "@/components/transaction-row";
@@ -48,6 +49,7 @@ export default function HomePage() {
   const month = overview.data?.month;
   const today = overview.data?.today;
   const topCategories = overview.data?.topCategories ?? [];
+  const budgets = overview.data?.budgets ?? [];
   const recentItems = recent.data?.items ?? [];
 
   return (
@@ -66,6 +68,52 @@ export default function HomePage() {
           </Link>
         </Button>
       </header>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>预算</CardTitle>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/settings">
+              管理
+              <ArrowRight />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {budgets.length === 0 ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2">
+              <p className="text-xs text-muted-foreground">还没有设置预算，先为每月支出定个额度吧</p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/settings">去设置</Link>
+              </Button>
+            </div>
+          ) : (
+            budgets.map((budget) => (
+              <div key={budget.id} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <CategoryIcon name={budget.categoryIcon ?? "wallet"} color={budget.categoryColor} />
+                  <span className="flex-1 truncate text-sm">{budget.categoryName ?? "总预算"}</span>
+                  <span className="font-mono text-sm tabular-nums">
+                    {money(budget.spentCents)}
+                    <span className="text-muted-foreground"> / {money(budget.amountCents)}</span>
+                  </span>
+                </div>
+                <BudgetProgress percentage={budget.percentage} />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {budgetPeriodLabel(budget.period)} · 已用 {budget.percentage}%
+                  </span>
+                  <span className={budget.remainingCents < 0 ? "text-rose-600 dark:text-rose-400" : ""}>
+                    {budget.remainingCents < 0
+                      ? `超支 ${money(-budget.remainingCents)}`
+                      : `剩余 ${money(budget.remainingCents)}`}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -53,3 +53,18 @@ export function resolveDayRange(from?: string | null, to?: string | null): { fro
     ? { from: resolvedFrom, to: resolvedTo }
     : { from: resolvedTo, to: resolvedFrom };
 }
+
+/** 预算周期：自然月 / 自然年 */
+export type BudgetPeriod = "monthly" | "yearly";
+
+/**
+ * 预算周期在当前时刻的生效区间 [from, to]，右端固定为业务日「今天」。
+ * monthly 从当月 1 号起，yearly 从当年 1 月 1 日起。
+ */
+export function resolveBudgetPeriodRange(
+  period: BudgetPeriod,
+  today = todayInBusinessTimezone(),
+): { from: string; to: string } {
+  const from = period === "yearly" ? `${today.slice(0, 4)}-01-01` : `${today.slice(0, 7)}-01`;
+  return { from, to: today };
+}

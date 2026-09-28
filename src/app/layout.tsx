@@ -15,15 +15,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "轻记账 · 个人记账 PWA",
-    template: "%s · 轻记账",
+    default: "账本 · 个人记账 PWA",
+    template: "%s · 账本",
   },
   description:
-    "基于 Next.js App Router、Cloudflare Workers 与 D1 的个人记账应用，支持微信登录、账单统计与 PWA 离线访问。",
+    "基于 Next.js App Router、Cloudflare Workers 与 D1 的个人记账应用，支持微信登录、账单统计、预算管理与 PWA 离线访问。",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "轻记账",
+    title: "账本",
     statusBarStyle: "default",
   },
   icons: {

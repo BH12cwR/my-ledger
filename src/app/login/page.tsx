@@ -113,7 +113,7 @@ export default function LoginPage() {
         <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
           <ShieldCheck className="size-6" />
         </span>
-        <h1 className="font-heading text-xl font-semibold">轻记账</h1>
+        <h1 className="font-heading text-xl font-semibold">账本</h1>
         <p className="text-sm text-muted-foreground">
           记录每一笔收支，看清钱都去了哪里
         </p>

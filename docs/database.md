@@ -29,6 +29,7 @@ users ──┬── accounts ──┐
         ├── categories ┘         │                               │
         │                        └── (transfer_peer_id 自关联)    │
         ├── tags ───────────────────────────────────────────────┘
+        ├── budgets (category_id → categories，可空表示总预算)
         └── sessions (principal_type = 'user')
 
 admin_users ──── sessions (principal_type = 'admin')
@@ -46,6 +47,7 @@ audit_logs（user / admin / system 三类主体共用）
 | `tags` | 标签 | [`TagRecord`](../src/server/db/types.ts) |
 | `transactions` | 账目记录 | [`TransactionRecord`](../src/server/db/types.ts) |
 | `transaction_tags` | 账目 ↔ 标签 多对多 | — |
+| `budgets` | 预算（总额 / 分类，按月 / 年循环） | [`BudgetRecord`](../src/server/db/types.ts) |
 | `audit_logs` | 审计日志（后台监控数据源） | [`AuditLogRecord`](../src/server/db/types.ts) |
 
 ## 3. 逐表说明
@@ -59,6 +61,11 @@ audit_logs（user / admin / system 三类主体共用）
 | `unionid` | TEXT | 唯一（部分索引） | 微信开放平台唯一标识，公众号/小程序互通时才有 |
 | `nickname` | TEXT | NOT NULL，默认 `记账用户` | |
 | `avatar_url` | TEXT | | |
+| `username` | TEXT | 唯一（部分索引），可为 NULL | 账号密码登录用；微信账号为 `NULL`，两者互不干扰 |
+| `password_hash` | TEXT | 可为 NULL | 格式同 `admin_users.password_hash`；微信账号为 `NULL` |
+| `failed_attempts` | INTEGER | NOT NULL，默认 0 | 连续登录失败计数 |
+| `locked_until` | INTEGER | | 锁定截止时间；`NULL` 或已过期则不算锁定 |
+| `password_updated_at` | INTEGER | | 口令最后修改时间 |
 | `status` | TEXT | `CHECK IN ('active','disabled')` | 被禁用后 `requireUser` 一律拒绝 |
 | `currency` | TEXT | 默认 `CNY` | |
 | `timezone` | TEXT | 默认 `Asia/Shanghai` | 展示用；统计口径固定 UTC+8 |
@@ -69,6 +76,7 @@ audit_logs（user / admin / system 三类主体共用）
 
 - `idx_users_openid` —— `UNIQUE (openid) WHERE openid IS NOT NULL`（部分唯一索引，允许多行 `NULL`）
 - `idx_users_unionid` —— 同上
+- `idx_users_username` —— `UNIQUE (username) WHERE username IS NOT NULL`，账号密码登录用户名唯一
 - `idx_users_created_at` —— `(created_at DESC)`，后台「新增用户」趋势用
 
 > `openid` / `unionid` 用**部分唯一索引**而非列级 `UNIQUE`：SQLite 中多行 `NULL` 不算冲突，
@@ -245,6 +253,29 @@ audit_logs（user / admin / system 三类主体共用）
 
 这是管理后台「审计日志」页与部分概览指标的**唯一数据来源**。
 
+### 3.10 `budgets` —— 预算
+
+| 字段 | 类型 | 约束 | 说明 |
+| --- | --- | --- | --- |
+| `id` | TEXT | PK | |
+| `user_id` | TEXT | NOT NULL，`REFERENCES users(id) ON DELETE CASCADE` | 多租户隔离键 |
+| `category_id` | TEXT | `REFERENCES categories(id) ON DELETE CASCADE`，**可为 NULL** | `NULL` = 总预算（该周期全部支出），否则为某支出分类 |
+| `period` | TEXT | `CHECK IN ('monthly','yearly')` | 自然月 / 自然年 |
+| `amount_cents` | INTEGER | NOT NULL，`CHECK (amount_cents > 0)` | 周期限额（分） |
+| `created_at` / `updated_at` | INTEGER | NOT NULL | |
+
+索引：
+
+- `idx_budgets_unique` —— `UNIQUE (user_id, period, COALESCE(category_id, ''))`，同一周期下同一范围只允许一条预算。
+- `idx_budgets_user` —— `(user_id, period)`。
+
+> 唯一索引用 `COALESCE(category_id, '')` 而非直接 `(user_id, period, category_id)`：SQLite 中多行 `NULL` 不冲突，
+> 直接建唯一索引会让「同一周期的多条总预算」都写成功，表达式索引把 `NULL` 归一为 `''` 后才真正唯一。
+
+预算**不按周期存多行**，一条记录循环生效；当前周期的已用金额在查询时由 `transactions` 实时聚合
+（`src/server/services/budgets.ts`），只统计 `kind = 'expense'` 且 `deleted_at IS NULL` 的账目。
+删除预算为**物理删除**。
+
 ## 4. 迁移方案
 
 迁移文件位于 `migrations/`，按文件名前缀**数字顺序**执行；wrangler 会在 `d1_migrations` 表中记录
@@ -254,6 +285,8 @@ audit_logs（user / admin / system 三类主体共用）
 | --- | --- |
 | [0001_init.sql](../migrations/0001_init.sql) | 9 张表 + 全部索引 |
 | [0002_system_categories.sql](../migrations/0002_system_categories.sql) | 19 条内置分类参照数据 |
+| [0003_user_password_login.sql](../migrations/0003_user_password_login.sql) | `users` 增补账号密码登录字段（`username` / `password_hash` / 失败锁定） |
+| [0004_budgets.sql](../migrations/0004_budgets.sql) | `budgets` 表 + 唯一索引 + 辅助索引 |
 
 `wrangler.toml` 中通过 `migrations_dir = "migrations"` 声明目录：
 
@@ -274,7 +307,7 @@ npm run db:migrate:remote   # 应用到线上 D1
 
 ### 新增迁移的约定
 
-1. 文件名遵循 `NNNN_描述.sql`（四位递增，如 `0003_add_budgets.sql`）。
+1. 文件名遵循 `NNNN_描述.sql`（四位递增，如 `0005_add_tags.sql`）。
 2. **只追加，不修改已应用的迁移**——线上库已经执行过，改动不会生效，只会造成环境间 schema 漂移。
 3. SQLite 的 `ALTER TABLE` 能力有限（不能删列/改类型/加带约束的列），复杂变更走
    「建新表 → `INSERT INTO ... SELECT` → 删旧表 → 重命名」四步，并注意此时需要临时关闭外键校验
@@ -313,3 +346,4 @@ npm run db:seed:local
 | 用户注销 | `ON DELETE CASCADE` 级联清理账户、分类、标签、账目、会话 |
 | D1 无长事务 | 多步写操作使用 `batch()` 提交（原子批次），避免「删旧关联成功、写新关联失败」的中间态 |
 | 金额精度 | 全链路整数分；只在 UI 展示与输入解析处转换为十进制字符串（`src/lib/money.ts`） |
+| 预算范围重复 | 同一周期下同一范围（总预算或某分类）由 `idx_budgets_unique` 兜底，服务层写前预校验并返回 409 |

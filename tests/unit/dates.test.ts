@@ -3,6 +3,7 @@ import {
   countDaysInclusive,
   fromBusinessDay,
   isValidDay,
+  resolveBudgetPeriodRange,
   resolveDayRange,
   shiftDay,
   toBusinessDay,
@@ -100,5 +101,26 @@ describe("resolveDayRange", () => {
       from: shiftDay(today, -29),
       to: today,
     });
+  });
+});
+
+describe("resolveBudgetPeriodRange", () => {
+  it("月周期从当月 1 日起算，截至今天", () => {
+    expect(resolveBudgetPeriodRange("monthly", "2026-09-15")).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-15",
+    });
+  });
+
+  it("年周期从当年 1 月 1 日起算，截至今天", () => {
+    expect(resolveBudgetPeriodRange("yearly", "2026-09-15")).toEqual({
+      from: "2026-01-01",
+      to: "2026-09-15",
+    });
+  });
+
+  it("默认使用业务时区的今天", () => {
+    const today = todayInBusinessTimezone();
+    expect(resolveBudgetPeriodRange("monthly").to).toBe(today);
   });
 });

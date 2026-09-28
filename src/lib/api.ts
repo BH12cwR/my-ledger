@@ -22,6 +22,7 @@ import type {
   SummaryResult,
   TrendPoint,
 } from "@/server/services/stats";
+import type { BudgetConfigDto, BudgetView } from "@/server/services/budgets";
 import type { OverviewMetrics } from "@/server/services/admin";
 
 // ---------------------------------------------------------------------------
@@ -57,6 +58,7 @@ export interface DashboardOverview {
   month: SummaryResult;
   today: SummaryResult;
   topCategories: CategoryBreakdownItem[];
+  budgets: BudgetView[];
 }
 
 export type TrendResponse =
@@ -76,7 +78,7 @@ export interface PlatformTrendResponse {
   points: Array<{ day: string; newUsers: number; transactions: number; amountCents: number }>;
 }
 
-export type { AccountBalanceItem, CategoryBreakdownItem, OverviewMetrics, SummaryResult, TrendPoint };
+export type { AccountBalanceItem, BudgetConfigDto, BudgetView, CategoryBreakdownItem, OverviewMetrics, SummaryResult, TrendPoint };
 
 // ---------------------------------------------------------------------------
 // 请求封装

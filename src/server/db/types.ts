@@ -1,4 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import type { BudgetPeriod } from "@/lib/dates";
 
 /**
  * D1 数据库句柄。业务服务层统一依赖该类型，便于在集成测试中注入
@@ -115,6 +116,20 @@ export interface TagRecord {
   user_id: string;
   name: string;
   color: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/** 预算周期：自然月 / 自然年 */
+export type { BudgetPeriod };
+
+export interface BudgetRecord {
+  id: string;
+  user_id: string;
+  /** NULL 表示总预算（该周期全部支出的合计限额），否则为某个支出分类 */
+  category_id: string | null;
+  period: BudgetPeriod;
+  amount_cents: number;
   created_at: number;
   updated_at: number;
 }

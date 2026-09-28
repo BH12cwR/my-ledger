@@ -2,7 +2,7 @@
 
 ## 1. 目标与边界
 
-「轻记账」是一个部署在 Cloudflare Pages 上的双端记账应用：
+「账本」是一个部署在 Cloudflare Pages 上的双端记账应用：
 
 - **用户端**：`/`、`/transactions`、`/stats`、`/settings` —— 移动优先的记账 PWA。
 - **管理后台**：`/admin/**` —— 平台级监控、用户治理与审计日志。

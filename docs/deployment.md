@@ -214,6 +214,10 @@ Cloudflare 的 **Workers Builds** 可以直接连接 GitHub / GitLab 仓库，pu
   `WECHAT_OAUTH_REDIRECT_BASE`。首次构建前先设好，否则 `/api/health` 会报缺少密钥。
 - **Build variables 与运行时变量是两套**：前者仅构建期可见。本项目没有 `NEXT_PUBLIC_*`，
   构建期无需额外变量。
+- **机密必须以 Secret 类型添加，不能加成普通变量**：`wrangler deploy`（每次构建都会执行）
+  会先清空 Dashboard 上手动添加的**环境变量**，再用 `wrangler.toml` 的 `[vars]` 覆盖。
+  所以以变量形式添加的 `AUTH_JWT_SECRET` 会在下次构建后消失。Secret 则是增量写入的，
+  不会被部署删除。详见 `wrangler deploy --keep-vars` 的说明。
 - 仓库已存在 `wrangler.toml`，因此不会触发 Cloudflare 的 autoconfig（自动建 PR 那套流程）。
 
 > `wrangler.toml` 里的 `database_id` 是资源标识符而非凭据，可安全提交到公开仓库；
@@ -285,6 +289,7 @@ curl -I https://<你的域名>/_next/static/chunks/<某个文件>.js
 | --- | --- |
 | `/api/health` 返回 500 且日志含 `DB` 未定义 | D1 绑定缺失。检查 `wrangler.toml` 的 `[[d1_databases]]`，并用 `wrangler deployments` 确认部署的版本 |
 | 接口全部 500 且日志提到缺少 `AUTH_JWT_SECRET` | secret 未设置。执行第 3.2 节的 `wrangler secret put` |
+| 每次重新构建后 `AUTH_JWT_SECRET` / `ADMIN_JWT_SECRET` 又「消失」 | 之前是以**普通变量**形式添加的：`wrangler deploy` 会清空 Dashboard 变量并用 `[vars]` 覆盖。改为 **Secret** 类型重新添加（或 `wrangler secret put`），secret 不会被部署删除 |
 | 所有接口 401 | 请求未带 Cookie，或 `AUTH_JWT_SECRET` 在部署后被改动（旧 token 全部失效）。重新登录即可 |
 | 管理员登录持续提示「已锁定」 | 触发 5 次失败锁定 15 分钟。等待或重跑 `create-admin.mjs` 重置 `failed_attempts`/`locked_until` |
 | 微信回调 `redirect_uri 参数错误` | 微信授权回调域、`WECHAT_OAUTH_REDIRECT_BASE`、实际访问域名三者不一致 |
