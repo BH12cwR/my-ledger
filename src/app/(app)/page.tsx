@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Plus } from "lucide-react";
 import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
 import { CategoryIcon } from "@/components/category-icon";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { EmptyBlock, ListSkeleton, LoadingBlock } from "@/components/layout/states";
 import { TransactionRow } from "@/components/transaction-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,19 +117,23 @@ export default function HomePage() {
           <CardTitle>{month ? `${monthLabel(month.from.slice(0, 7))}结余` : "本月结余"}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <p className="font-mono text-3xl font-semibold tabular-nums">
+          <p
+            className={`font-mono text-4xl font-semibold tabular-nums tracking-tight ${
+              (month?.netCents ?? 0) < 0 ? "text-rose-600 dark:text-rose-400" : ""
+            }`}
+          >
             {money(month?.netCents ?? 0)}
           </p>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg bg-muted/60 px-3 py-2">
               <p className="text-xs text-muted-foreground">本月收入</p>
-              <p className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+              <p className="font-mono font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
                 {money(month?.incomeCents ?? 0)}
               </p>
             </div>
             <div className="rounded-lg bg-muted/60 px-3 py-2">
               <p className="text-xs text-muted-foreground">本月支出</p>
-              <p className="font-mono tabular-nums text-rose-600 dark:text-rose-400">
+              <p className="font-mono font-medium tabular-nums text-rose-600 dark:text-rose-400">
                 {money(month?.expenseCents ?? 0)}
               </p>
             </div>
@@ -166,7 +170,7 @@ export default function HomePage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {topCategories.length === 0 ? (
-            <p className="py-4 text-center text-xs text-muted-foreground">
+            <p className="rounded-lg bg-muted/60 px-3 py-6 text-center text-xs text-muted-foreground">
               本月还没有支出记录
             </p>
           ) : (
@@ -201,7 +205,7 @@ export default function HomePage() {
         </CardHeader>
         <CardContent>
           {recent.loading ? (
-            <LoadingBlock label="正在加载流水…" />
+            <ListSkeleton rows={3} />
           ) : recentItems.length === 0 ? (
             <EmptyBlock
               title="还没有任何记录"
@@ -247,10 +251,10 @@ function Metric({
       <p
         className={
           tone === "income"
-            ? "font-mono tabular-nums text-emerald-600 dark:text-emerald-400"
+            ? "font-mono font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
             : tone === "expense"
-              ? "font-mono tabular-nums text-rose-600 dark:text-rose-400"
-              : "font-mono tabular-nums"
+              ? "font-mono font-medium tabular-nums text-rose-600 dark:text-rose-400"
+              : "font-mono font-medium tabular-nums"
         }
       >
         {value}

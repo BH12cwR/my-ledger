@@ -182,9 +182,9 @@ export async function listTransactions(
 
   const totalRow = await db
     .prepare(
+      // categories 只在按关键字搜索（c.name LIKE ?）时才参与过滤，其余场景无需 JOIN
       `SELECT COUNT(*) AS count
-         FROM transactions t
-         LEFT JOIN categories c ON c.id = t.category_id
+         FROM transactions t${query.keyword ? "\n         LEFT JOIN categories c ON c.id = t.category_id" : ""}
         WHERE ${where}`,
     )
     .bind(...params)
@@ -273,6 +273,7 @@ export async function refundTransaction(
   const source = origin.note?.trim() || origin.category_name || "支出";
   const note = `退款：${source}`.slice(0, 200);
   const id = crypto.randomUUID();
+  const happenedOn = todayInBusinessTimezone(now);
 
   await db.batch([
     db
@@ -283,7 +284,7 @@ export async function refundTransaction(
             created_at, updated_at, deleted_at)
          VALUES (?, ?, ?, NULL, 'income', ?, 'CNY', ?, ?, ?, NULL, ?, NULL, ?, ?, NULL)`,
       )
-      .bind(id, userId, origin.account_id, origin.amount_cents, note, now, todayInBusinessTimezone(now), origin.id, now, now),
+      .bind(id, userId, origin.account_id, origin.amount_cents, note, now, happenedOn, origin.id, now, now),
     db
       .prepare(
         `UPDATE transactions SET refunded_at = ?, updated_at = ?
@@ -292,9 +293,30 @@ export async function refundTransaction(
       .bind(now, now, origin.id, userId),
   ]);
 
-  const refund = await getTransaction(db, userId, id);
-  const updatedOrigin = await getTransaction(db, userId, origin.id);
-  if (!refund || !updatedOrigin) throw ApiError.internal("退款失败");
+  // 退款行与来源行的新状态都能由 origin 唯一推导，无需再回表查询。
+  const refund: TransactionView = {
+    ...origin,
+    id,
+    account_id: origin.account_id,
+    category_id: null,
+    category_name: null,
+    category_icon: null,
+    category_color: null,
+    kind: "income",
+    currency: "CNY",
+    note,
+    happened_at: now,
+    happened_on: happenedOn,
+    transfer_peer_id: null,
+    refund_of_id: origin.id,
+    refunded_at: null,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+    tags: [],
+  };
+  const updatedOrigin: TransactionView = { ...origin, refunded_at: now, updated_at: now };
+
   return { refund, origin: updatedOrigin };
 }
 

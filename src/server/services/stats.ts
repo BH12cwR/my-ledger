@@ -89,6 +89,28 @@ function appendFilters(
   }
 }
 
+/** 由已算好的合计构造 summary，供单区间与首页概览复用，保证口径一致 */
+function buildSummary(
+  from: string,
+  to: string,
+  incomeCents: number,
+  expenseCents: number,
+  transactionCount: number,
+  expenseCount: number,
+): SummaryResult {
+  return {
+    from,
+    to,
+    incomeCents,
+    expenseCents,
+    netCents: incomeCents - expenseCents,
+    transactionCount,
+    expenseCount,
+    // 平均支出只按支出笔数摊分，否则会被收入笔数拉低
+    averageExpenseCents: expenseCount > 0 ? Math.round(expenseCents / expenseCount) : 0,
+  };
+}
+
 export async function getSummary(
   db: Db,
   userId: string,
@@ -118,22 +140,14 @@ export async function getSummary(
       expense_count: number;
     }>();
 
-  const incomeCents = row?.income_cents ?? 0;
-  const expenseCents = row?.expense_cents ?? 0;
-  const transactionCount = row?.transaction_count ?? 0;
-  const expenseCount = row?.expense_count ?? 0;
-
-  return {
+  return buildSummary(
     from,
     to,
-    incomeCents,
-    expenseCents,
-    netCents: incomeCents - expenseCents,
-    transactionCount,
-    expenseCount,
-    // 平均支出只按支出笔数摊分，否则会被收入笔数拉低
-    averageExpenseCents: expenseCount > 0 ? Math.round(expenseCents / expenseCount) : 0,
-  };
+    row?.income_cents ?? 0,
+    row?.expense_cents ?? 0,
+    row?.transaction_count ?? 0,
+    row?.expense_count ?? 0,
+  );
 }
 
 /** 按自然日聚合，并补齐区间内没有账目的日期，方便前端直接绘图 */
@@ -373,16 +387,55 @@ export async function getDashboardOverview(db: Db, userId: string) {
   const today = todayInBusinessTimezone();
   const monthStart = `${today.slice(0, 7)}-01`;
 
-  const [month, todaySummary, breakdown, budgets] = await Promise.all([
-    getSummary(db, userId, { from: monthStart, to: today }),
-    getSummary(db, userId, { from: today, to: today }),
+  // 本月与今日共用一次表扫描：今日指标由 CASE WHEN 在 SELECT 中派生。
+  // 注意绑参顺序——SELECT 中的 4 个「今日」占位符排在 WHERE 参数之前。
+  const [summaryRow, breakdown, budgets] = await Promise.all([
+    db
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
+           COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents,
+           COUNT(*) AS transaction_count,
+           COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS expense_count,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS today_income_cents,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS today_expense_cents,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? THEN 1 ELSE 0 END), 0) AS today_transaction_count,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS today_expense_count
+         FROM transactions t
+        WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.happened_on BETWEEN ? AND ?`,
+      )
+      .bind(today, today, today, today, userId, monthStart, today)
+      .first<{
+        income_cents: number;
+        expense_cents: number;
+        transaction_count: number;
+        expense_count: number;
+        today_income_cents: number;
+        today_expense_cents: number;
+        today_transaction_count: number;
+        today_expense_count: number;
+      }>(),
     getCategoryBreakdown(db, userId, { from: monthStart, to: today, kind: "expense" }),
     getBudgetOverview(db, userId, today),
   ]);
 
   return {
-    month,
-    today: todaySummary,
+    month: buildSummary(
+      monthStart,
+      today,
+      summaryRow?.income_cents ?? 0,
+      summaryRow?.expense_cents ?? 0,
+      summaryRow?.transaction_count ?? 0,
+      summaryRow?.expense_count ?? 0,
+    ),
+    today: buildSummary(
+      today,
+      today,
+      summaryRow?.today_income_cents ?? 0,
+      summaryRow?.today_expense_cents ?? 0,
+      summaryRow?.today_transaction_count ?? 0,
+      summaryRow?.today_expense_count ?? 0,
+    ),
     topCategories: breakdown.items.slice(0, 5),
     budgets,
   };

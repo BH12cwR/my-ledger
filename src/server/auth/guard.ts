@@ -1,7 +1,7 @@
 import type { AuthContext, Db, Env } from "../db/types";
 import { ApiError } from "../http/errors";
 import { resolveDeps, type RouteDeps } from "../http/deps";
-import { purgeExpiredSessions, resolveAuth } from "./session";
+import { maybePurgeExpiredSessions, resolveAuth } from "./session";
 import type { AdminRole } from "../db/types";
 
 /**
@@ -40,8 +40,8 @@ async function requirePrincipal(
 ): Promise<AuthContext> {
   const auth = await resolveAuth(db, env, request, principalType);
 
-  // 附带一次低成本的机会式清理，避免会话表无限增长
-  void purgeExpiredSessions(db).catch(() => undefined);
+  // 附带一次机会式清理（内部按时间窗口节流），避免会话表无限增长
+  maybePurgeExpiredSessions(db);
 
   if (!auth) {
     throw principalType === "admin"

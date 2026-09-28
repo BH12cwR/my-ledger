@@ -6,7 +6,7 @@ import { Archive, ArchiveRestore, Loader2, LogOut, Pencil, Plus, Trash2 } from "
 import { toast } from "sonner";
 import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
 import { CategoryIcon } from "@/components/category-icon";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { EmptyBlock, ListSkeleton } from "@/components/layout/states";
 import { useSession } from "@/components/providers/session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,17 +78,20 @@ export default function SettingsPage() {
   const router = useRouter();
 
   const [showArchived, setShowArchived] = useState(false);
+  // 只有当前 Tab（以及预算弹窗依赖的分类）才发起请求，避免挂载时一次性打满 5 个接口。
+  const [tab, setTab] = useState("accounts");
   const accounts = useApiQuery<{ items: AccountDto[] }>(
-    `/api/accounts${showArchived ? "?includeArchived=true" : ""}`,
+    tab === "accounts" ? `/api/accounts${showArchived ? "?includeArchived=true" : ""}` : null,
   );
   const balances = useApiQuery<{ items: AccountBalanceItem[] }>(
-    `/api/stats/accounts${showArchived ? "?includeArchived=true" : ""}`,
+    tab === "accounts" ? `/api/stats/accounts${showArchived ? "?includeArchived=true" : ""}` : null,
   );
+  // 预算弹窗的「范围」下拉需要支出分类，因此预算 Tab 也需要这份数据。
   const categories = useApiQuery<{ items: CategoryDto[] }>(
-    `/api/categories?includeArchived=true`,
+    tab === "categories" || tab === "budgets" ? "/api/categories?includeArchived=true" : null,
   );
-  const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
-  const budgets = useApiQuery<{ items: BudgetView[] }>("/api/budgets");
+  const tags = useApiQuery<{ items: TagDto[] }>(tab === "tags" ? "/api/tags" : null);
+  const budgets = useApiQuery<{ items: BudgetView[] }>(tab === "budgets" ? "/api/budgets" : null);
 
   const [accountDialog, setAccountDialog] = useState(false);
   const [accountName, setAccountName] = useState("");
@@ -359,7 +362,7 @@ export default function SettingsPage() {
         <Switch checked={showArchived} onCheckedChange={setShowArchived} />
       </div>
 
-      <Tabs defaultValue="accounts">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full">
           <TabsTrigger value="accounts">账户</TabsTrigger>
           <TabsTrigger value="categories">分类</TabsTrigger>
@@ -373,7 +376,7 @@ export default function SettingsPage() {
             新增账户
           </Button>
           {accounts.loading ? (
-            <LoadingBlock />
+            <ListSkeleton rows={4} />
           ) : (
             <div className="flex flex-col gap-2">
               {(accounts.data?.items ?? []).map((account) => (
@@ -462,7 +465,7 @@ export default function SettingsPage() {
             新增分类
           </Button>
           {categories.loading ? (
-            <LoadingBlock />
+            <ListSkeleton rows={4} />
           ) : (
             <div className="flex flex-col gap-2">
               {(categories.data?.items ?? []).map((category) => (
@@ -549,7 +552,7 @@ export default function SettingsPage() {
           </Button>
 
           {tags.loading ? (
-            <LoadingBlock />
+            <ListSkeleton rows={3} />
           ) : (tags.data?.items ?? []).length === 0 ? (
             <EmptyBlock title="还没有标签" description="标签用于给账目加维度，例如「出差」「报销」" />
           ) : (
@@ -602,7 +605,7 @@ export default function SettingsPage() {
             设置预算
           </Button>
           {budgets.loading ? (
-            <LoadingBlock />
+            <ListSkeleton rows={3} />
           ) : (budgets.data?.items ?? []).length === 0 ? (
             <EmptyBlock
               title="还没有预算"

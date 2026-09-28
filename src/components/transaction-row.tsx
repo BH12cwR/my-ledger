@@ -26,6 +26,10 @@ export function TransactionRow({
     transaction.accountName,
     showUser ? transaction.userNickname ?? transaction.userId : null,
   ].filter((part): part is string => Boolean(part));
+  // 移动端一行放不下太多标签，最多展示 2 个，其余折叠为 +N
+  const visibleTags = transaction.tags.slice(0, 2);
+  const hiddenTagCount = transaction.tags.length - visibleTags.length;
+  const refunded = !isIncome && transaction.refundedAt !== null;
 
   return (
     <button
@@ -43,13 +47,26 @@ export function TransactionRow({
       />
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{title}</span>
-          {transaction.tags.map((tag) => (
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 truncate text-sm font-medium">{title}</span>
+          {visibleTags.map((tag) => (
             <Badge key={tag} variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
               {tag}
             </Badge>
           ))}
+          {hiddenTagCount > 0 ? (
+            <span className="shrink-0 text-[10px] text-muted-foreground">+{hiddenTagCount}</span>
+          ) : null}
+          {transaction.refundOfId ? (
+            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+              退款
+            </Badge>
+          ) : null}
+          {refunded ? (
+            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+              已退款
+            </Badge>
+          ) : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {subtitleParts.length > 0 ? subtitleParts.join(" · ") : transaction.happenedOn}

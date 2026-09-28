@@ -127,50 +127,98 @@ export async function resolveAuth(
   const claims = await verifySessionToken(token, sessionSecret(env, principalType));
   if (!claims || claims.typ !== principalType) return null;
 
-  const session = await db
-    .prepare(
-      `SELECT id, principal_id, expires_at, revoked_at, last_seen_at
-         FROM sessions
-        WHERE id = ? AND principal_type = ?`,
-    )
-    .bind(claims.sid, principalType)
-    .first<{ id: string; principal_id: string; expires_at: number; revoked_at: number | null; last_seen_at: number }>();
-
-  if (!session || session.revoked_at !== null || session.expires_at <= Date.now()) {
-    return null;
-  }
-  if (session.principal_id !== claims.sub) return null;
-
-  const now = Date.now();
-  if (now - session.last_seen_at > LAST_SEEN_REFRESH_MS) {
-    await db
-      .prepare(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`)
-      .bind(now, session.id)
-      .run();
-  }
-
+  // 用一条 LEFT JOIN 同时取回会话与主体状态，把每次鉴权从两次往返压缩为一次。
+  // LEFT JOIN 保证主体缺失时仍能拿到会话行，从而与原先「先查会话、再查主体」的判定等价。
   if (principalType === "admin") {
-    const admin = await db
-      .prepare(`SELECT id, username, role, status FROM admin_users WHERE id = ?`)
-      .bind(claims.sub)
-      .first<Pick<AdminRecord, "id" | "username" | "role" | "status">>();
-    if (!admin || admin.status !== "active") return null;
+    const row = await db
+      .prepare(
+        `SELECT s.id AS session_id, s.principal_id, s.expires_at, s.revoked_at, s.last_seen_at,
+                a.id AS admin_id, a.username AS admin_username, a.role AS admin_role, a.status AS admin_status
+           FROM sessions s
+           LEFT JOIN admin_users a ON a.id = s.principal_id
+          WHERE s.id = ? AND s.principal_type = ?`,
+      )
+      .bind(claims.sid, principalType)
+      .first<{
+        session_id: string;
+        principal_id: string;
+        expires_at: number;
+        revoked_at: number | null;
+        last_seen_at: number;
+        admin_id: string | null;
+        admin_username: string | null;
+        admin_role: AdminRecord["role"] | null;
+        admin_status: AdminRecord["status"] | null;
+      }>();
+
+    if (!validateSessionRow(row, claims.sub)) return null;
+    if (!row.admin_id || row.admin_status !== "active" || !row.admin_role) return null;
+
+    await touchSession(db, row.session_id, row.last_seen_at);
     return {
       principalType,
-      principalId: admin.id,
-      sessionId: session.id,
-      adminRole: admin.role,
-      adminUsername: admin.username,
+      principalId: row.admin_id,
+      sessionId: row.session_id,
+      adminRole: row.admin_role,
+      adminUsername: row.admin_username ?? undefined,
     };
   }
 
-  const user = await db
-    .prepare(`SELECT id, status FROM users WHERE id = ?`)
-    .bind(claims.sub)
-    .first<Pick<UserRecord, "id" | "status">>();
-  if (!user || user.status !== "active") return null;
+  const row = await db
+    .prepare(
+      `SELECT s.id AS session_id, s.principal_id, s.expires_at, s.revoked_at, s.last_seen_at,
+              u.id AS user_id, u.status AS user_status
+         FROM sessions s
+         LEFT JOIN users u ON u.id = s.principal_id
+        WHERE s.id = ? AND s.principal_type = ?`,
+    )
+    .bind(claims.sid, principalType)
+    .first<{
+      session_id: string;
+      principal_id: string;
+      expires_at: number;
+      revoked_at: number | null;
+      last_seen_at: number;
+      user_id: string | null;
+      user_status: UserRecord["status"] | null;
+    }>();
 
-  return { principalType, principalId: user.id, sessionId: session.id };
+  if (!validateSessionRow(row, claims.sub)) return null;
+  if (!row.user_id || row.user_status !== "active") return null;
+
+  await touchSession(db, row.session_id, row.last_seen_at);
+  return { principalType, principalId: row.user_id, sessionId: row.session_id };
+}
+
+interface SessionRow {
+  session_id: string;
+  principal_id: string;
+  expires_at: number;
+  revoked_at: number | null;
+  last_seen_at: number;
+}
+
+/** 会话行有效性：存在、未吊销、未过期、主体与令牌声明一致 */
+function validateSessionRow(
+  row: SessionRow | null,
+  claimedSub: string,
+): row is SessionRow {
+  return (
+    row !== null &&
+    row.revoked_at === null &&
+    row.expires_at > Date.now() &&
+    row.principal_id === claimedSub
+  );
+}
+
+/** 距上次活跃超过阈值才回写 last_seen_at，避免每个请求都产生一次写入 */
+async function touchSession(db: Db, sessionId: string, lastSeenAt: number): Promise<void> {
+  const now = Date.now();
+  if (now - lastSeenAt <= LAST_SEEN_REFRESH_MS) return;
+  await db
+    .prepare(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`)
+    .bind(now, sessionId)
+    .run();
 }
 
 export async function revokeSession(db: Db, sessionId: string): Promise<void> {
@@ -203,4 +251,20 @@ export async function purgeExpiredSessions(db: Db, olderThanMs = Date.now()): Pr
     .bind(olderThanMs)
     .run();
   return result.meta?.changes ?? 0;
+}
+
+/** 机会式清理的最小间隔：避免每个鉴权请求都触发一次 DELETE */
+const SESSION_PURGE_INTERVAL_MS = 10 * 60 * 1000;
+let lastPurgeAt = 0;
+
+/**
+ * 机会式清理过期会话。
+ *
+ * 以模块级时间戳做近似节流（Workers 隔离实例内有效）：大多数鉴权请求只做一次
+ * 时间戳比较，只有超过间隔的那一次才真正发起 DELETE，从而消除每个请求一次写操作。
+ */
+export function maybePurgeExpiredSessions(db: Db, now = Date.now()): void {
+  if (now - lastPurgeAt < SESSION_PURGE_INTERVAL_MS) return;
+  lastPurgeAt = now;
+  void purgeExpiredSessions(db, now).catch(() => undefined);
 }
