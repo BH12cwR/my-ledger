@@ -4,17 +4,18 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   Pencil,
   RotateCcw,
   Search,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { DetailRow } from "@/components/detail-row";
+import { ErrorBlock, EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { Pagination } from "@/components/layout/pagination";
 import { TransactionRow } from "@/components/transaction-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,6 +91,8 @@ export default function TransactionsPage() {
   const [target, setTarget] = useState<TransactionDto | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  // 删除不可逆，先在弹窗内做一次二次确认，避免误触直接删掉一笔
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const categories = useApiQuery<{ items: CategoryDto[] }>("/api/categories");
   const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
@@ -138,13 +141,19 @@ export default function TransactionsPage() {
     });
   }
 
+  /** 关闭详情并清掉二次确认状态，避免下次打开残留上次的确认态 */
+  function closeDetail() {
+    setTarget(null);
+    setConfirmingDelete(false);
+  }
+
   async function handleDelete() {
     if (!target) return;
     setDeleting(true);
     try {
       await api.delete(`/api/transactions/${target.id}`);
       toast.success("已删除该笔记录");
-      setTarget(null);
+      closeDetail();
       query.reload();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -309,15 +318,7 @@ export default function TransactionsPage() {
       {query.loading ? (
         <LoadingBlock label="正在加载流水…" />
       ) : query.error ? (
-        <EmptyBlock
-          title="加载失败"
-          description={query.error}
-          action={
-            <Button variant="outline" size="sm" onClick={query.reload}>
-              重试
-            </Button>
-          }
-        />
+        <ErrorBlock description={query.error} onRetry={query.reload} />
       ) : items.length === 0 ? (
         <EmptyBlock title="没有符合条件的记录" description="试着放宽日期范围或清空筛选条件" />
       ) : (
@@ -334,35 +335,17 @@ export default function TransactionsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-xs text-muted-foreground">
-              共 {query.data?.total ?? 0} 笔 · 第 {query.data?.page ?? 1} / {Math.max(totalPages, 1)} 页
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              >
-                <ArrowLeft />
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((value) => value + 1)}
-              >
-                下一页
-                <ArrowRight />
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={query.data?.total ?? 0}
+            unit="笔"
+            onPageChange={setPage}
+          />
         </>
       )}
 
-      <Dialog open={target !== null} onOpenChange={(open) => (open ? undefined : setTarget(null))}>
+      <Dialog open={target !== null} onOpenChange={(open) => (open ? undefined : closeDetail())}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{target?.categoryName ?? "账目详情"}</DialogTitle>
@@ -373,37 +356,65 @@ export default function TransactionsPage() {
 
           {target ? (
             <div className="flex flex-col gap-2 text-sm">
-              <Row label="类型" value={target.kind === "income" ? "收入" : "支出"} />
-              <Row label="金额" value={money(target.amountCents)} />
-              <Row label="账户" value={target.accountName ?? "未指定"} />
-              <Row label="备注" value={target.note ?? "无"} />
-              <Row label="标签" value={target.tags.length > 0 ? target.tags.join("、") : "无"} />
-              {target.refundOfId ? <Row label="状态" value="退款收入（不可编辑）" /> : null}
-              {target.refundedAt ? <Row label="状态" value="已退款" /> : null}
+              <DetailRow label="类型" value={target.kind === "income" ? "收入" : "支出"} />
+              <DetailRow label="金额" value={money(target.amountCents)} mono />
+              <DetailRow label="账户" value={target.accountName ?? "未指定"} />
+              <DetailRow label="备注" value={target.note ?? "无"} />
+              <DetailRow label="标签" value={target.tags.length > 0 ? target.tags.join("、") : "无"} />
+              {target.refundOfId ? (
+                <DetailRow label="状态" value="退款收入（不可编辑）" />
+              ) : null}
+              {target.refundedAt ? <DetailRow label="状态" value="已退款" /> : null}
             </div>
           ) : null}
 
           <DialogFooter className="gap-2">
-            {canRefund ? (
-              <Button variant="secondary" disabled={refunding} onClick={handleRefund}>
-                <RotateCcw />
-                退款
-              </Button>
-            ) : null}
-            <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
-              <Trash2 />
-              删除
-            </Button>
-            {target && !target.refundOfId ? (
-              <Button
-                onClick={() => {
-                  router.push(`/transactions/new?id=${target.id}`);
-                }}
-              >
-                <Pencil />
-                编辑
-              </Button>
-            ) : null}
+            {confirmingDelete ? (
+              <>
+                <span className="mr-auto self-center text-xs text-muted-foreground">
+                  删除后不可恢复
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={deleting}
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  取消
+                </Button>
+                <Button variant="destructive" size="sm" disabled={deleting} onClick={handleDelete}>
+                  {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                  确认删除
+                </Button>
+              </>
+            ) : (
+              <>
+                {canRefund ? (
+                  <Button variant="secondary" disabled={refunding} onClick={handleRefund}>
+                    <RotateCcw />
+                    退款
+                  </Button>
+                ) : null}
+                <Button
+                  variant="destructive"
+                  disabled={deleting}
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  <Trash2 />
+                  删除
+                </Button>
+                {target && !target.refundOfId ? (
+                  <Button
+                    onClick={() => {
+                      router.push(`/transactions/new?id=${target.id}`);
+                    }}
+                  >
+                    <Pencil />
+                    编辑
+                  </Button>
+                ) : null}
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -411,11 +422,3 @@ export default function TransactionsPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="max-w-[60%] truncate text-right">{value}</span>
-    </div>
-  );
-}

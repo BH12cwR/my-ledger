@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -82,7 +82,10 @@ export default function StatsPage() {
   const [dimension, setDimension] = useState<Dimension>("category");
   const [categoryId, setCategoryId] = useState("");
   const [tagId, setTagId] = useState("");
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // 悬停与锁定分开管理：悬停是临时查看（移开即恢复），锁定需显式点击且不会被移开鼠标清掉。
+  // 触摸端不触发 mouseleave，若两者共用一个 state 会出现「桌面点完就丢、移动端点了就摘不掉」的分裂行为。
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
 
   const categories = useApiQuery<{ items: CategoryDto[] }>("/api/categories");
   const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
@@ -134,21 +137,29 @@ export default function StatsPage() {
       tagId,
     })}`,
   );
-  const breakdown = useApiQuery<CategoryBreakdownResponse>(
-    `/api/stats/by-category${buildQuery({
-      from: range.from,
-      to: range.to,
-      kind,
-      dimension,
-      categoryId,
-      tagId,
-    })}`,
-  );
+  const breakdownPath = `/api/stats/by-category${buildQuery({
+    from: range.from,
+    to: range.to,
+    kind,
+    dimension,
+    categoryId,
+    tagId,
+  })}`;
+  const breakdown = useApiQuery<CategoryBreakdownResponse>(breakdownPath);
 
   const points = trend.data?.points ?? [];
   const items = breakdown.data?.items ?? [];
   const hasTrendData = points.some((point) => point.incomeCents > 0 || point.expenseCents > 0);
   const kindLabel = kind === "income" ? "收入" : "支出";
+
+  // 换区间/维度后扇区已经换了，索引会指向另一条数据，必须清掉选中态。
+  useEffect(() => {
+    setHoverIndex(null);
+    setPinnedIndex(null);
+  }, [breakdownPath]);
+
+  // 悬停优先于锁定：鼠标划过时临时查看，移开后回落到锁定的扇区
+  const activeIndex = hoverIndex ?? pinnedIndex;
   const activeItem = activeIndex === null ? undefined : items[activeIndex];
 
   // 已选中的分类即使与当前数据类型不符也要保留在下拉框中，避免选项失配。
@@ -156,24 +167,20 @@ export default function StatsPage() {
     (item) => item.kind === kind || item.id === categoryId,
   );
 
+  // summary 的四个数字是整页骨架，等它到齐再渲染。
+  // 否则会先画出 ¥0.00 再跳变到真实值（趋势图已有各自的 loading，这里补上页面级拦截）。
+  if (summary.loading) return <LoadingBlock label="正在汇总收支…" />;
+
   if (summary.error) {
     return (
-      <EmptyBlock
+      <ErrorBlock
         title="统计加载失败"
         description={summary.error}
-        action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              summary.reload();
-              trend.reload();
-              breakdown.reload();
-            }}
-          >
-            重试
-          </Button>
-        }
+        onRetry={() => {
+          summary.reload();
+          trend.reload();
+          breakdown.reload();
+        }}
       />
     );
   }
@@ -426,9 +433,11 @@ export default function StatsPage() {
                       outerRadius={84}
                       paddingAngle={2}
                       strokeWidth={0}
-                      onMouseEnter={(_data, index) => setActiveIndex(index)}
-                      onMouseLeave={() => setActiveIndex(null)}
-                      onClick={(_data, index) => setActiveIndex(index)}
+                      onMouseEnter={(_data, index) => setHoverIndex(index)}
+                      onMouseLeave={() => setHoverIndex(null)}
+                      onClick={(_data, index) =>
+                        setPinnedIndex((current) => (current === index ? null : index))
+                      }
                     >
                       {items.map((item, index) => (
                         <Cell
@@ -459,7 +468,7 @@ export default function StatsPage() {
                       <span className="font-mono font-medium tabular-nums">
                         {money(breakdown.data?.totalCents ?? 0)}
                       </span>
-                      <span className="text-xs text-muted-foreground">点击扇区查看明细</span>
+                      <span className="text-xs text-muted-foreground">点击锁定，再点取消</span>
                     </>
                   )}
                 </div>
@@ -470,12 +479,16 @@ export default function StatsPage() {
                   <button
                     key={item.id ?? item.name}
                     type="button"
-                    onClick={() => setActiveIndex(activeIndex === index ? null : index)}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onMouseLeave={() => setActiveIndex(null)}
+                    aria-pressed={pinnedIndex === index}
+                    onClick={() =>
+                      setPinnedIndex((current) => (current === index ? null : index))
+                    }
+                    onMouseEnter={() => setHoverIndex(index)}
+                    onMouseLeave={() => setHoverIndex(null)}
                     className={cn(
                       "flex items-center gap-2 rounded-lg px-1 py-0.5 text-left text-sm transition-colors",
-                      activeIndex === index && "bg-muted/60",
+                      hoverIndex === index && "bg-muted/60",
+                      pinnedIndex === index && "bg-primary/10 ring-1 ring-primary/30",
                     )}
                   >
                     <span

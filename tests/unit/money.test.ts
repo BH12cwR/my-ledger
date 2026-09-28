@@ -4,9 +4,9 @@ import {
   MAX_AMOUNT_CENTS,
   centsToInputValue,
   formatCents,
-  formatMoney,
   parseAmountToCents,
 } from "@/lib/money";
+import { money } from "@/lib/format";
 
 describe("parseAmountToCents", () => {
   it("把两位以内的十进制字符串换算为分", () => {
@@ -80,19 +80,25 @@ describe("formatCents", () => {
   });
 });
 
-describe("formatMoney", () => {
+describe("money", () => {
   it("带货币符号输出", () => {
-    expect(formatMoney(123456)).toBe("¥1,234.56");
-    expect(formatMoney(0)).toBe("¥0.00");
+    expect(money(123456)).toBe("¥1,234.56");
+    expect(money(0)).toBe("¥0.00");
   });
 
   it("负数把符号放在货币符号之前", () => {
-    expect(formatMoney(-123456)).toBe("-¥1,234.56");
-    expect(formatMoney(-5)).toBe("-¥0.05");
+    expect(money(-123456)).toBe("-¥1,234.56");
+    expect(money(-5)).toBe("-¥0.05");
   });
 
   it("支持自定义货币符号", () => {
-    expect(formatMoney(100, "$")).toBe("$1.00");
+    expect(money(100, "$")).toBe("$1.00");
+  });
+
+  it("null 与 undefined 回退为零值而不是崩溃", () => {
+    expect(money(null)).toBe("¥0.00");
+    expect(money(undefined)).toBe("¥0.00");
+    expect(money(null, "$")).toBe("$0.00");
   });
 });
 

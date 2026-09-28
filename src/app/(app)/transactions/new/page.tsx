@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, Tag as TagIcon } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryBadge } from "@/components/category-icon";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -165,21 +165,13 @@ export default function TransactionEditorPage() {
 
   if (categories.error || accounts.error) {
     return (
-      <EmptyBlock
+      <ErrorBlock
         title="表单初始化失败"
-        description={categories.error ?? accounts.error ?? ""}
-        action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              categories.reload();
-              accounts.reload();
-            }}
-          >
-            重试
-          </Button>
-        }
+        description={categories.error ?? accounts.error}
+        onRetry={() => {
+          categories.reload();
+          accounts.reload();
+        }}
       />
     );
   }

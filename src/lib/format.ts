@@ -9,19 +9,6 @@ export function money(cents: number | null | undefined, symbol = "¥"): string {
   return cents < 0 ? `-${symbol}${text.slice(1)}` : `${symbol}${text}`;
 }
 
-/** 带正负号的金额，用于流水与趋势对比 */
-export function signedMoney(cents: number, symbol = "¥"): string {
-  if (cents === 0) return `${symbol}0.00`;
-  return `${cents > 0 ? "+" : "-"}${symbol}${formatCents(Math.abs(cents))}`;
-}
-
-/** YYYY-MM-DD → M月D日 */
-export function shortDay(day: string): string {
-  const [, month, date] = day.split("-");
-  if (!month || !date) return day;
-  return `${Number(month)}月${Number(date)}日`;
-}
-
 /** YYYY-MM-DD → MM-DD，用于图表坐标轴 */
 export function axisDay(day: string): string {
   const parts = day.split("-");
@@ -49,6 +36,19 @@ const DATE_TIME = new Intl.DateTimeFormat("zh-CN", {
 export function dateTime(ms: number | null | undefined): string {
   if (!ms) return "-";
   return DATE_TIME.format(new Date(ms));
+}
+
+const DAY = new Intl.DateTimeFormat("zh-CN", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "Asia/Shanghai",
+});
+
+/** 毫秒时间戳 → 2026/09/27。不带时分，用于「自 X 起」这类区间描述 */
+export function dateLabel(ms: number | null | undefined): string {
+  if (!ms) return "-";
+  return DAY.format(new Date(ms));
 }
 
 /** 相对时间，用于「最后活跃」这类弱信息 */

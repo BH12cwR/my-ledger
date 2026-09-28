@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { Pagination } from "@/components/layout/pagination";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -110,15 +111,7 @@ export default function AdminAuditLogsPage() {
       {query.loading ? (
         <LoadingBlock label="正在加载日志…" />
       ) : query.error ? (
-        <EmptyBlock
-          title="加载失败"
-          description={query.error}
-          action={
-            <Button variant="outline" size="sm" onClick={query.reload}>
-              重试
-            </Button>
-          }
-        />
+        <ErrorBlock description={query.error} onRetry={query.reload} />
       ) : items.length === 0 ? (
         <EmptyBlock title="没有匹配的日志" description="换个关键词或来源再试" />
       ) : (
@@ -162,31 +155,13 @@ export default function AdminAuditLogsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-xs text-muted-foreground">
-              共 {query.data?.total ?? 0} 条 · 第 {query.data?.page ?? 1} / {Math.max(totalPages, 1)} 页
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              >
-                <ArrowLeft />
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((value) => value + 1)}
-              >
-                下一页
-                <ArrowRight />
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={query.data?.total ?? 0}
+            unit="条"
+            onPageChange={setPage}
+          />
         </>
       )}
     </div>

@@ -15,6 +15,8 @@ import type {
   TransactionDto,
   UserDto,
 } from "@/server/http/serialize";
+// 错误信封 shape 由服务端响应层定义，前端只做类型引用，避免两侧各写一份而漂移
+import type { ApiErrorBody } from "@/server/http/response";
 import type { Paginated } from "@/server/services/common";
 import type {
   AccountBalanceItem,
@@ -32,6 +34,7 @@ import type { OverviewMetrics } from "@/server/services/admin";
 export type {
   AccountDto,
   AdminDto,
+  ApiErrorBody,
   AuditLogDto,
   CategoryDto,
   Paginated,
@@ -39,10 +42,6 @@ export type {
   TransactionDto,
   UserDto,
 };
-
-export interface ApiErrorBody {
-  error: { code: string; message: string; details?: unknown };
-}
 
 export interface Capabilities {
   wechat: boolean;

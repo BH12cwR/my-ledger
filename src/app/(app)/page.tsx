@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Plus } from "lucide-react";
 import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
 import { CategoryIcon } from "@/components/category-icon";
-import { EmptyBlock, ListSkeleton, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, EmptyBlock, ListSkeleton, LoadingBlock } from "@/components/layout/states";
 import { TransactionRow } from "@/components/transaction-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,17 +31,7 @@ export default function HomePage() {
   if (overview.loading) return <LoadingBlock label="正在加载你的账本…" />;
 
   if (overview.error) {
-    return (
-      <EmptyBlock
-        title="账本加载失败"
-        description={overview.error}
-        action={
-          <Button variant="outline" size="sm" onClick={overview.reload}>
-            重新加载
-          </Button>
-        }
-      />
-    );
+    return <ErrorBlock title="账本加载失败" description={overview.error} onRetry={overview.reload} />;
   }
 
   const month = overview.data?.month;
@@ -52,18 +42,6 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 truncate font-heading text-lg font-semibold">
-          今天也要好好记账
-        </h1>
-        <Button asChild size="sm">
-          <Link href="/transactions/new">
-            <Plus />
-            记一笔
-          </Link>
-        </Button>
-      </header>
-
       <Card>
         <CardHeader>
           <CardTitle>预算</CardTitle>

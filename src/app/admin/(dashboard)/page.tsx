@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,7 +12,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { buildQuery, type OverviewMetrics, type PlatformTrendResponse } from "@/lib/api";
-import { axisDay, money } from "@/lib/format";
+import { axisDay, dateLabel, money } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
 
 const TREND_CONFIG = {
@@ -40,17 +40,7 @@ export default function AdminOverviewPage() {
   if (metrics.loading) return <LoadingBlock label="正在汇总平台指标…" />;
 
   if (metrics.error) {
-    return (
-      <EmptyBlock
-        title="指标加载失败"
-        description={metrics.error}
-        action={
-          <Button variant="outline" size="sm" onClick={metrics.reload}>
-            重试
-          </Button>
-        }
-      />
-    );
+    return <ErrorBlock title="指标加载失败" description={metrics.error} onRetry={metrics.reload} />;
   }
 
   const data = metrics.data;
@@ -62,7 +52,7 @@ export default function AdminOverviewPage() {
         <div>
           <h1 className="font-heading text-lg font-semibold">平台概览</h1>
           <p className="text-xs text-muted-foreground">
-            {data?.range.days} 天窗口 · 自 {new Date(data?.range.since ?? Date.now()).toLocaleDateString("zh-CN")} 起
+            {data?.range.days} 天窗口 · 自 {dateLabel(data?.range.since)} 起
           </p>
         </div>
         <div className="flex gap-2">
@@ -119,11 +109,7 @@ export default function AdminOverviewPage() {
         />
         <StatCard
           title="人均记账"
-          value={(() => {
-            const active = data?.users.activeInRange ?? 0;
-            if (active === 0) return "0";
-            return (Math.round(((data?.transactions.inRange ?? 0) / active) * 10) / 10).toFixed(1);
-          })()}
+          value={perUser(data?.transactions.inRange ?? 0, data?.users.activeInRange ?? 0)}
           hint="区间笔数 / 活跃用户"
         />
       </div>
@@ -169,6 +155,12 @@ export default function AdminOverviewPage() {
       </Card>
     </div>
   );
+}
+
+/** 人均值保留一位小数；除数为 0 时返回 0 而不是 NaN / Infinity */
+function perUser(total: number, users: number): string {
+  if (users === 0) return "0";
+  return (Math.round((total / users) * 10) / 10).toFixed(1);
 }
 
 function StatCard({ title, value, hint }: { title: string; value: string; hint: string }) {

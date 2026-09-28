@@ -61,12 +61,6 @@ export function formatCents(cents: number): string {
   return `${negative ? "-" : ""}${intText}.${String(fraction).padStart(2, "0")}`;
 }
 
-/** 带货币符号的展示，例如 ¥1,234.56 */
-export function formatMoney(cents: number, symbol = "¥"): string {
-  const text = formatCents(cents);
-  return cents < 0 ? `-${symbol}${text.slice(1)}` : `${symbol}${text}`;
-}
-
 /** 用于输入框回填：1234 分 → "12.34" */
 export function centsToInputValue(cents: number): string {
   return formatCents(cents).replace(/,/g, "");

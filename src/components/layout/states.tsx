@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, PackageOpen } from "lucide-react";
+import { Loader2, PackageOpen, TriangleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /** 统一的居中加载态，避免每个页面各写一套 */
 export function LoadingBlock({ label = "加载中…" }: { label?: string }) {
@@ -36,21 +37,35 @@ export function ListSkeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
-/** 空状态：列表没数据时给出明确的下一步指引 */
+/**
+ * 空状态与错误状态共用一套布局，靠 tone 区分语义：
+ * 空态是中性提示（还没数据），错误态是危险提示（数据没取到）。
+ */
 export function EmptyBlock({
   title,
   description,
   action,
   icon,
+  tone = "neutral",
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
   icon?: React.ReactNode;
+  tone?: "neutral" | "danger";
 }) {
+  const danger = tone === "danger";
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 px-4 py-12 text-center">
-      <span className="mb-1 inline-flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+    <div
+      className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-12 text-center ${
+        danger ? "border-destructive/40 bg-destructive/5" : "border-border/70"
+      }`}
+    >
+      <span
+        className={`mb-1 inline-flex size-10 items-center justify-center rounded-full ${
+          danger ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
+        }`}
+      >
         {icon ?? <PackageOpen className="size-5" />}
       </span>
       <p className="text-sm font-medium">{title}</p>
@@ -59,5 +74,38 @@ export function EmptyBlock({
       ) : null}
       {action}
     </div>
+  );
+}
+
+/**
+ * 加载失败态：给出错误原因与重试入口。
+ *
+ * 多请求页面（如统计页）可在 onRetry 里一次性重载全部相关查询。
+ */
+export function ErrorBlock({
+  title = "加载失败",
+  description,
+  onRetry,
+  retryLabel = "重试",
+}: {
+  title?: string;
+  description?: string | null;
+  onRetry?: () => void;
+  retryLabel?: string;
+}) {
+  return (
+    <EmptyBlock
+      tone="danger"
+      title={title}
+      description={description ?? undefined}
+      icon={<TriangleAlert className="size-5" />}
+      action={
+        onRetry ? (
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            {retryLabel}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }

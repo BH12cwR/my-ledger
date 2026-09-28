@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Search, ShieldAlert, UserCheck, UserX } from "lucide-react";
+import { Search, ShieldAlert, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { DetailRow } from "@/components/detail-row";
+import { ErrorBlock, EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { Pagination } from "@/components/layout/pagination";
 import { useAdminSession } from "@/components/providers/admin-session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,15 +148,7 @@ export default function AdminUsersPage() {
       {query.loading ? (
         <LoadingBlock label="正在加载用户…" />
       ) : query.error ? (
-        <EmptyBlock
-          title="加载失败"
-          description={query.error}
-          action={
-            <Button variant="outline" size="sm" onClick={query.reload}>
-              重试
-            </Button>
-          }
-        />
+        <ErrorBlock description={query.error} onRetry={query.reload} />
       ) : items.length === 0 ? (
         <EmptyBlock title="没有匹配的用户" description="换个关键词或状态再试" />
       ) : (
@@ -230,31 +224,13 @@ export default function AdminUsersPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-xs text-muted-foreground">
-              共 {query.data?.total ?? 0} 人 · 第 {query.data?.page ?? 1} / {Math.max(totalPages, 1)} 页
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              >
-                <ArrowLeft />
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((value) => value + 1)}
-              >
-                下一页
-                <ArrowRight />
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={query.data?.total ?? 0}
+            unit="人"
+            onPageChange={setPage}
+          />
         </>
       )}
 
@@ -271,16 +247,20 @@ export default function AdminUsersPage() {
             <p className="text-sm text-destructive">{detail.error}</p>
           ) : detail.data ? (
             <div className="flex flex-col gap-2 text-sm">
-              <Row label="状态" value={detail.data.user.status === "active" ? "正常" : "已禁用"} />
-              <Row label="记账笔数" value={`${detail.data.stats.transactionCount}`} />
-              <Row label="累计支出" value={money(detail.data.stats.totalExpenseCents)} />
-              <Row label="累计收入" value={money(detail.data.stats.totalIncomeCents)} />
-              <Row label="净结余" value={money(
-                detail.data.stats.totalIncomeCents - detail.data.stats.totalExpenseCents,
-              )} />
-              <Row label="最近记账" value={relativeTime(detail.data.stats.lastTransactionAt)} />
-              <Row label="注册时间" value={dateTime(detail.data.user.createdAt)} />
-              <Row label="最后登录" value={dateTime(detail.data.user.lastLoginAt)} />
+              <DetailRow label="状态" value={detail.data.user.status === "active" ? "正常" : "已禁用"} mono />
+              <DetailRow label="记账笔数" value={`${detail.data.stats.transactionCount}`} mono />
+              <DetailRow label="累计支出" value={money(detail.data.stats.totalExpenseCents)} mono />
+              <DetailRow label="累计收入" value={money(detail.data.stats.totalIncomeCents)} mono />
+              <DetailRow
+                label="净结余"
+                value={money(
+                  detail.data.stats.totalIncomeCents - detail.data.stats.totalExpenseCents,
+                )}
+                mono
+              />
+              <DetailRow label="最近记账" value={relativeTime(detail.data.stats.lastTransactionAt)} mono />
+              <DetailRow label="注册时间" value={dateTime(detail.data.user.createdAt)} mono />
+              <DetailRow label="最后登录" value={dateTime(detail.data.user.lastLoginAt)} mono />
               {detail.data.user.status === "disabled" ? (
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldAlert className="size-3.5" />
@@ -295,11 +275,3 @@ export default function AdminUsersPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="max-w-[60%] truncate text-right font-mono tabular-nums">{value}</span>
-    </div>
-  );
-}

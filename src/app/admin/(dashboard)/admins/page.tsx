@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { useAdminSession } from "@/components/providers/admin-session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,15 +104,7 @@ export default function AdminAdminsPage() {
       {query.loading ? (
         <LoadingBlock label="正在加载管理员…" />
       ) : query.error ? (
-        <EmptyBlock
-          title="加载失败"
-          description={query.error}
-          action={
-            <Button variant="outline" size="sm" onClick={query.reload}>
-              重试
-            </Button>
-          }
-        />
+        <ErrorBlock description={query.error} onRetry={query.reload} />
       ) : (
         <Card>
           <CardContent className="overflow-x-auto">
