@@ -1,9 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
+import { useRouter } from "next/navigation";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+  type PieLabelRenderProps,
+} from "recharts";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { CategoryRank } from "@/components/stats/category-rank";
+import { MonthSheet } from "@/components/date/date-sheet";
 import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
+import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
@@ -11,7 +26,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,15 +42,46 @@ import {
   type TagDto,
   type TrendResponse,
 } from "@/lib/api";
-import { shiftDay, todayInBusinessTimezone } from "@/lib/dates";
+import {
+  periodMonthOf,
+  resolveMonthRange,
+  shiftMonth,
+  todayInBusinessTimezone,
+} from "@/lib/dates";
 import { axisDay, money, monthLabel } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
+import { useMonthStartDay } from "@/lib/month-start-day";
 import { cn } from "@/lib/utils";
 
 const TREND_CONFIG = {
   incomeCents: { label: "收入", color: "#10b981" },
   expenseCents: { label: "支出", color: "#f43f5e" },
 } satisfies ChartConfig;
+
+/** 环形图最多渲染几个环外标签，超出后靠下方排行榜看全量，避免标签互相压字 */
+const MAX_RING_LABELS = 6;
+
+const GRANULARITIES = [
+  { value: "month", label: "月" },
+  { value: "year", label: "年" },
+] as const;
+type Granularity = (typeof GRANULARITIES)[number]["value"];
+
+const KINDS = [
+  { value: "expense", label: "支出", activeClass: "bg-rose-500 text-white" },
+  { value: "income", label: "收入", activeClass: "bg-emerald-500 text-white" },
+  { value: "all", label: "全部", activeClass: "bg-blue-500 text-white" },
+] as const;
+type StatsKind = (typeof KINDS)[number]["value"];
+
+const DIMENSIONS = [
+  { value: "category", label: "按分类" },
+  { value: "tag", label: "按标签" },
+] as const;
+type Dimension = (typeof DIMENSIONS)[number]["value"];
+
+/** Radix Select 不允许空字符串 value，用哨兵值表示「全部」 */
+const ALL = "__all__";
 
 /** 坐标轴上的金额压缩为「元」，避免出现一长串 0 */
 function axisMoney(cents: number): string {
@@ -45,130 +90,109 @@ function axisMoney(cents: number): string {
   return yuan.toFixed(0);
 }
 
-/** Radix Select 不允许空字符串 value，用哨兵值表示「全部」 */
-const ALL = "__all__";
-
-const TIME_MODES = [
-  { value: "week", label: "本周" },
-  { value: "month", label: "本月" },
-  { value: "year", label: "今年" },
-  { value: "pickMonth", label: "选月份" },
-  { value: "custom", label: "自定义" },
-] as const;
-type TimeMode = (typeof TIME_MODES)[number]["value"];
-
-const DIMENSIONS = [
-  { value: "category", label: "按分类" },
-  { value: "tag", label: "按标签" },
-] as const;
-type Dimension = (typeof DIMENSIONS)[number]["value"];
-
 /**
- * 统计页。
+ * 统计页（稿 4）。
  *
- * 三个接口各司其职：summary 出结论数字、trend 出走势、by-category 出结构。
- * 时间范围支持「本周 / 本月 / 今年」预设，以及按月份或自定义区间查询；
- * 结构图可按数据类型、分类、标签筛选，并在分类与标签两种聚合维度间切换。
+ * 顶部「月 / 年」决定粒度：月按账期（受「月份起始日」影响）取整月，年取整年。
+ * 「支出 / 收入 / 全部」决定口径，「全部」为收支合并（仅结构占比与排行有意义，
+ * 环形图在「全部」下固定看支出）。
+ * 环比由服务端在同一次请求里返回上一同长度周期（决策 5），前端不发第二次请求。
  */
 export default function StatsPage() {
+  const router = useRouter();
   const today = todayInBusinessTimezone();
+  const [monthStartDay, setMonthStartDay] = useMonthStartDay();
 
-  const [mode, setMode] = useState<TimeMode>("month");
-  const [monthValue, setMonthValue] = useState(today.slice(0, 7));
-  const [customFrom, setCustomFrom] = useState(shiftDay(today, -29));
-  const [customTo, setCustomTo] = useState(today);
+  const [granularity, setGranularity] = useState<Granularity>("month");
+  // 用户手动选过月份后固定住，避免起始日异步加载完成时把默认月份改回去
+  const [monthOverride, setMonthOverride] = useState<string | null>(null);
+  const [year, setYear] = useState(() => today.slice(0, 4));
 
-  const [kind, setKind] = useState<"expense" | "income">("expense");
+  const [kind, setKind] = useState<StatsKind>("expense");
   const [dimension, setDimension] = useState<Dimension>("category");
   const [categoryId, setCategoryId] = useState("");
   const [tagId, setTagId] = useState("");
-  // 悬停与锁定分开管理：悬停是临时查看（移开即恢复），锁定需显式点击且不会被移开鼠标清掉。
-  // 触摸端不触发 mouseleave，若两者共用一个 state 会出现「桌面点完就丢、移动端点了就摘不掉」的分裂行为。
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  // 悬停与锁定分开管理：悬停移开即恢复，锁定需显式点击（触摸端不触发 mouseleave）
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
+
+  const month = monthOverride ?? periodMonthOf(today, monthStartDay);
+  const range = useMemo(
+    () =>
+      granularity === "month"
+        ? resolveMonthRange(month, monthStartDay)
+        : { from: `${year}-01-01`, to: `${year}-12-31` },
+    [granularity, month, monthStartDay, year],
+  );
+  const trendGranularity = granularity === "month" ? ("day" as const) : ("month" as const);
 
   const categories = useApiQuery<{ items: CategoryDto[] }>("/api/categories");
   const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
 
-  const range = useMemo(() => {
-    if (mode === "week") {
-      // 以周一为一周起点：getUTCDay() 的 0 表示周日，需整体前移 6 天计算偏移。
-      const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
-      return {
-        from: shiftDay(today, -((weekday + 6) % 7)),
-        to: today,
-        granularity: "day" as const,
-      };
-    }
-    if (mode === "year") {
-      return { from: `${today.slice(0, 4)}-01-01`, to: today, granularity: "month" as const };
-    }
-    if (mode === "pickMonth") {
-      const month = monthValue || today.slice(0, 7);
-      const [year, mon] = month.split("-").map(Number);
-      // Date.UTC 的 day=0 即上个月最后一天，正好是该月的自然天数。
-      const lastDay = new Date(Date.UTC(year, mon, 0)).getUTCDate();
-      return {
-        from: `${month}-01`,
-        to: `${month}-${String(lastDay).padStart(2, "0")}`,
-        granularity: "day" as const,
-      };
-    }
-    if (mode === "custom") {
-      return { from: customFrom, to: customTo, granularity: "day" as const };
-    }
-    return { from: `${today.slice(0, 7)}-01`, to: today, granularity: "day" as const };
-  }, [mode, today, monthValue, customFrom, customTo]);
+  const filterQuery = { from: range.from, to: range.to, categoryId, tagId };
 
   const summary = useApiQuery<SummaryResult>(
-    `/api/stats/summary${buildQuery({
-      from: range.from,
-      to: range.to,
-      categoryId,
-      tagId,
-    })}`,
+    `/api/stats/summary${buildQuery({ ...filterQuery, compare: 1 })}`,
   );
   const trend = useApiQuery<TrendResponse>(
     `/api/stats/trend${buildQuery({
-      from: range.from,
-      to: range.to,
-      granularity: range.granularity,
-      categoryId,
-      tagId,
+      ...filterQuery,
+      granularity: trendGranularity,
     })}`,
   );
   const breakdownPath = `/api/stats/by-category${buildQuery({
-    from: range.from,
-    to: range.to,
+    ...filterQuery,
     kind,
     dimension,
-    categoryId,
-    tagId,
+    compare: 1,
   })}`;
+  // 「全部」下环形图仍需要单一类型，另取一次支出口径；其它情况下与排行榜共用同一份数据
+  const ringQueryPath =
+    kind === "all"
+      ? `/api/stats/by-category${buildQuery({
+          ...filterQuery,
+          kind: "expense",
+          dimension: "category",
+          compare: 1,
+        })}`
+      : null;
+
   const breakdown = useApiQuery<CategoryBreakdownResponse>(breakdownPath);
+  const ringQuery = useApiQuery<CategoryBreakdownResponse>(ringQueryPath);
 
-  const points = trend.data?.points ?? [];
-  const items = breakdown.data?.items ?? [];
-  const hasTrendData = points.some((point) => point.incomeCents > 0 || point.expenseCents > 0);
-  const kindLabel = kind === "income" ? "收入" : "支出";
+  const ringData = kind === "all" ? ringQuery.data : breakdown.data;
+  const ringItems = ringData?.items ?? [];
 
-  // 换区间/维度后扇区已经换了，索引会指向另一条数据，必须清掉选中态。
+  // 换区间/口径后扇区已经换了，索引会指向另一条数据，必须清掉选中态
   useEffect(() => {
     setHoverIndex(null);
     setPinnedIndex(null);
-  }, [breakdownPath]);
+  }, [breakdownPath, ringQueryPath]);
 
-  // 悬停优先于锁定：鼠标划过时临时查看，移开后回落到锁定的扇区
   const activeIndex = hoverIndex ?? pinnedIndex;
-  const activeItem = activeIndex === null ? undefined : items[activeIndex];
+  const activeItem = activeIndex === null ? undefined : ringItems[activeIndex];
 
-  // 已选中的分类即使与当前数据类型不符也要保留在下拉框中，避免选项失配。
+  const points = trend.data?.points ?? [];
+  const hasTrendData = points.some((point) => point.incomeCents > 0 || point.expenseCents > 0);
+  const kindLabel = kind === "income" ? "收入" : "支出";
+
+  // 已选中的分类即使与当前口径不符也要保留在下拉框中，避免选项失配
   const categoryOptions = (categories.data?.items ?? []).filter(
-    (item) => item.kind === kind || item.id === categoryId,
+    (item) => kind === "all" || item.kind === kind || item.id === categoryId,
   );
+  const filterCount = (categoryId ? 1 : 0) + (tagId ? 1 : 0) + (dimension === "tag" ? 1 : 0);
 
-  // summary 的四个数字是整页骨架，等它到齐再渲染。
-  // 否则会先画出 ¥0.00 再跳变到真实值（趋势图已有各自的 loading，这里补上页面级拦截）。
+  function step(delta: number) {
+    if (granularity === "month") {
+      setMonthOverride(shiftMonth(month, delta));
+      return;
+    }
+    setYear((current) => String(Number(current) + delta));
+  }
+
+  // summary 是整页骨架，等它到齐再渲染，避免先画 ¥0.00 再跳变
   if (summary.loading) return <LoadingBlock label="正在汇总收支…" />;
 
   if (summary.error) {
@@ -187,131 +211,78 @@ export default function StatsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-col gap-3">
-        <h1 className="font-heading text-lg font-semibold">收支统计</h1>
-        <div className="flex flex-wrap gap-2">
-          {TIME_MODES.map((item) => (
-            <Button
-              key={item.value}
-              size="sm"
-              variant={item.value === mode ? "default" : "outline"}
-              onClick={() => setMode(item.value)}
-            >
-              {item.label}
-            </Button>
-          ))}
+      <header className="flex items-center gap-2">
+        <Button variant="ghost" size="icon-sm" aria-label="返回" onClick={() => router.push("/")}>
+          <ArrowLeft />
+        </Button>
+        <h1 className="font-heading text-lg font-semibold">统计</h1>
+
+        <div className="ml-auto flex items-center gap-1">
+          <div className="flex gap-1 rounded-xl bg-muted/60 p-1">
+            {GRANULARITIES.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setGranularity(item.value)}
+                className={cn(
+                  "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+                  granularity === item.value
+                    ? "bg-background shadow-sm"
+                    : "text-muted-foreground",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="筛选"
+            onClick={() => setFilterOpen(true)}
+            className={cn(filterCount > 0 && "text-blue-600 dark:text-blue-400")}
+          >
+            <SlidersHorizontal />
+          </Button>
         </div>
-        {mode === "pickMonth" ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="statsMonth">选择月份</Label>
-            <Input
-              id="statsMonth"
-              type="month"
-              value={monthValue}
-              onChange={(event) => setMonthValue(event.target.value)}
-            />
-          </div>
-        ) : null}
-        {mode === "custom" ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="statsFrom">开始日期</Label>
-              <Input
-                id="statsFrom"
-                type="date"
-                value={customFrom}
-                onChange={(event) => setCustomFrom(event.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="statsTo">结束日期</Label>
-              <Input
-                id="statsTo"
-                type="date"
-                value={customTo}
-                onChange={(event) => setCustomTo(event.target.value)}
-              />
-            </div>
-          </div>
-        ) : null}
       </header>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>数据类型</Label>
-              <Select
-                value={kind}
-                onValueChange={(value) => setKind(value as "expense" | "income")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="expense">支出</SelectItem>
-                  <SelectItem value="income">收入</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>统计维度</Label>
-              <Select
-                value={dimension}
-                onValueChange={(value) => setDimension(value as Dimension)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DIMENSIONS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>分类</Label>
-              <Select
-                value={categoryId || ALL}
-                onValueChange={(value) => setCategoryId(value === ALL ? "" : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>全部分类</SelectItem>
-                  {categoryOptions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>标签</Label>
-              <Select value={tagId || ALL} onValueChange={(value) => setTagId(value === ALL ? "" : value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>全部标签</SelectItem>
-                  {(tags.data?.items ?? []).map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="icon-sm" aria-label="上一期" onClick={() => step(-1)}>
+          <ChevronLeft />
+        </Button>
+        <button
+          type="button"
+          onClick={() => {
+            if (granularity === "month") setSheetOpen(true);
+          }}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium transition-colors hover:bg-muted/60"
+        >
+          <CalendarDays className="size-4 text-muted-foreground" />
+          {granularity === "month" ? monthLabel(month) : `${year}年`}
+        </button>
+        <Button variant="ghost" size="icon-sm" aria-label="下一期" onClick={() => step(1)}>
+          <ChevronRight />
+        </Button>
+      </div>
+
+      <div className="flex gap-1 rounded-xl bg-muted/60 p-1">
+        {KINDS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => setKind(item.value)}
+            className={cn(
+              "flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors",
+              kind === item.value
+                ? item.activeClass
+                : "text-muted-foreground hover:bg-background/60",
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
 
       <Card>
         <CardContent className="grid grid-cols-2 gap-3 text-sm">
@@ -324,7 +295,7 @@ export default function StatsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{range.granularity === "month" ? "月度收支走势" : "每日收支走势"}</CardTitle>
+          <CardTitle>{trendGranularity === "month" ? "月度收支走势" : "每日收支走势"}</CardTitle>
         </CardHeader>
         <CardContent>
           {trend.loading ? (
@@ -356,7 +327,7 @@ export default function StatsPage() {
                   tickMargin={8}
                   minTickGap={16}
                   tickFormatter={(value: string) =>
-                    range.granularity === "month" ? monthLabel(value) : axisDay(value)
+                    trendGranularity === "month" ? monthLabel(value) : axisDay(value)
                   }
                 />
                 <YAxis
@@ -370,7 +341,7 @@ export default function StatsPage() {
                     <ChartTooltipContent
                       indicator="line"
                       labelFormatter={(value) =>
-                        range.granularity === "month" ? monthLabel(String(value)) : String(value)
+                        trendGranularity === "month" ? monthLabel(String(value)) : String(value)
                       }
                       formatter={(value) => money(Number(value))}
                     />
@@ -398,22 +369,20 @@ export default function StatsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {kindLabel}结构 · {dimension === "tag" ? "按标签" : "按分类"}
-          </CardTitle>
+          <CardTitle>{kind === "all" ? "支出结构" : `${kindLabel}结构`}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {breakdown.loading ? (
+          {breakdown.loading || ringQuery.loading ? (
             <LoadingBlock label="正在汇总…" />
-          ) : items.length === 0 ? (
+          ) : ringItems.length === 0 ? (
             <p className="py-6 text-center text-xs text-muted-foreground">
-              该区间内没有{kindLabel}记录
+              该区间内没有{kind === "all" ? "支出" : kindLabel}记录
             </p>
           ) : (
             <>
-              <div className="relative mx-auto aspect-square h-56">
+              <div className="relative mx-auto h-64 w-full max-w-xs">
                 <ChartContainer
-                  config={{ amountCents: { label: kindLabel } } satisfies ChartConfig}
+                  config={{ amountCents: { label: "金额" } } satisfies ChartConfig}
                   className="h-full w-full"
                 >
                   <PieChart>
@@ -426,20 +395,21 @@ export default function StatsPage() {
                       }
                     />
                     <Pie
-                      data={items}
+                      data={ringItems}
                       dataKey="amountCents"
                       nameKey="name"
                       innerRadius={52}
-                      outerRadius={84}
+                      outerRadius={72}
                       paddingAngle={2}
                       strokeWidth={0}
+                      label={renderRingLabel}
                       onMouseEnter={(_data, index) => setHoverIndex(index)}
                       onMouseLeave={() => setHoverIndex(null)}
                       onClick={(_data, index) =>
                         setPinnedIndex((current) => (current === index ? null : index))
                       }
                     >
-                      {items.map((item, index) => (
+                      {ringItems.map((item, index) => (
                         <Cell
                           key={item.id ?? item.name}
                           fill={item.color}
@@ -464,44 +434,31 @@ export default function StatsPage() {
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-muted-foreground">{kindLabel}合计</span>
-                      <span className="font-mono font-medium tabular-nums">
-                        {money(breakdown.data?.totalCents ?? 0)}
+                      <span className="text-xs text-muted-foreground">
+                        {kind === "all" ? "支出合计" : `${kindLabel}合计`}
                       </span>
-                      <span className="text-xs text-muted-foreground">点击锁定，再点取消</span>
+                      <span className="font-mono font-medium tabular-nums">
+                        {money(ringData?.totalCents ?? 0)}
+                      </span>
                     </>
                   )}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {items.map((item, index) => (
+              <div className="flex justify-center gap-1 rounded-xl bg-muted/60 p-1">
+                {KINDS.slice(0, 2).map((item) => (
                   <button
-                    key={item.id ?? item.name}
+                    key={item.value}
                     type="button"
-                    aria-pressed={pinnedIndex === index}
-                    onClick={() =>
-                      setPinnedIndex((current) => (current === index ? null : index))
-                    }
-                    onMouseEnter={() => setHoverIndex(index)}
-                    onMouseLeave={() => setHoverIndex(null)}
+                    onClick={() => setKind(item.value)}
                     className={cn(
-                      "flex items-center gap-2 rounded-lg px-1 py-0.5 text-left text-sm transition-colors",
-                      hoverIndex === index && "bg-muted/60",
-                      pinnedIndex === index && "bg-primary/10 ring-1 ring-primary/30",
+                      "flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors",
+                      (kind === "all" ? "expense" : kind) === item.value
+                        ? item.activeClass
+                        : "text-muted-foreground",
                     )}
                   >
-                    <span
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{item.name}</span>
-                    <span className="text-xs text-muted-foreground">{item.transactionCount} 笔</span>
-                    <span className="font-mono tabular-nums">{money(item.amountCents)}</span>
-                    <span className="w-12 text-right text-xs text-muted-foreground">
-                      {item.percentage}%
-                    </span>
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -509,7 +466,150 @@ export default function StatsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{dimension === "tag" ? "标签排行" : "分类排行"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {breakdown.loading ? (
+            <LoadingBlock label="正在汇总…" />
+          ) : (breakdown.data?.items ?? []).length === 0 ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              该区间内没有{kind === "all" ? "" : kindLabel}记录
+            </p>
+          ) : (
+            <CategoryRank
+              items={breakdown.data?.items ?? []}
+              onSelect={
+                dimension === "category"
+                  ? (item) => {
+                      if (!item.id) return;
+                      router.push(`/stats/category/${item.id}`);
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <MonthSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        value={month}
+        onSelect={setMonthOverride}
+        monthStartDay={monthStartDay}
+        onMonthStartDayChange={setMonthStartDay}
+      />
+
+      <BottomSheet open={filterOpen} onOpenChange={setFilterOpen}>
+        <BottomSheetContent
+          title="筛选"
+          footer={
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setCategoryId("");
+                  setTagId("");
+                  setDimension("category");
+                }}
+              >
+                重置
+              </Button>
+              <Button className="flex-1" onClick={() => setFilterOpen(false)}>
+                完成
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4 pt-1">
+            <div className="flex flex-col gap-1.5">
+              <Label>统计维度</Label>
+              <Select
+                value={dimension}
+                onValueChange={(value) => setDimension(value as Dimension)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DIMENSIONS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label>分类</Label>
+              <Select
+                value={categoryId || ALL}
+                onValueChange={(value) => setCategoryId(value === ALL ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>全部分类</SelectItem>
+                  {categoryOptions.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label>标签</Label>
+              <Select
+                value={tagId || ALL}
+                onValueChange={(value) => setTagId(value === ALL ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>全部标签</SelectItem>
+                  {(tags.data?.items ?? []).map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </BottomSheetContent>
+      </BottomSheet>
     </div>
+  );
+}
+
+/** 环外标签：分类名 + 百分比；只画前几个，其余靠排行榜看全量 */
+function renderRingLabel(props: PieLabelRenderProps) {
+  const index = props.index;
+  if (typeof index === "number" && index >= MAX_RING_LABELS) return null;
+
+  const percent = typeof props.percent === "number" ? props.percent : 0;
+  const x = Number(props.x);
+  const cx = Number(props.cx);
+
+  return (
+    <text
+      x={x}
+      y={Number(props.y)}
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      className="fill-muted-foreground text-[10px]"
+    >
+      {`${String(props.name ?? "")} ${(percent * 100).toFixed(2)}%`}
+    </text>
   );
 }
 

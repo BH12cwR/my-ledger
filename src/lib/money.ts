@@ -50,6 +50,37 @@ export function parseAmountToCents(input: string | number, options: ParseAmountO
   return cents;
 }
 
+/**
+ * 计算器式求值：把 "12.30+5-3" 按从左到右（同级）解析为「分」。
+ * 仅支持 + / -，每段金额用 parseAmountToCents 逐段校验（允许 0，是否合法由调用方判断）。
+ */
+export function evaluateAmountExpression(expression: string): number {
+  const text = expression.trim().replace(/[+\-]+$/, "");
+  if (!text) throw new AmountError("请输入金额");
+
+  const parts = text.split(/([+\-])/);
+  let total = 0;
+  let sign = 1;
+  for (const part of parts) {
+    if (part === "+") {
+      sign = 1;
+      continue;
+    }
+    if (part === "-") {
+      sign = -1;
+      continue;
+    }
+    // 键盘输入常停在 "12." 这种中间态，按 "12" 处理
+    const segment = part.endsWith(".") ? part.slice(0, -1) : part;
+    if (segment === "") throw new AmountError("金额格式不正确，请输入不超过两位小数的正数");
+    total += sign * parseAmountToCents(segment, { allowZero: true });
+    sign = 1;
+  }
+
+  if (total > MAX_AMOUNT_CENTS) throw new AmountError("金额超出上限");
+  return total;
+}
+
 /** 把「分」格式化为带千分位的十进制字符串，例如 -123456 → "-1,234.56" */
 export function formatCents(cents: number): string {
   const rounded = Math.round(cents);

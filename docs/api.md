@@ -274,6 +274,7 @@
     "categoryId": "cat_sys_expense_food", "categoryName": "餐饮",
     "categoryIcon": "utensils", "categoryColor": "#f97316",
     "accountId": "uuid", "accountName": "微信钱包", "accountType": "wechat",
+    "toAccountId": null, "toAccountName": null,
     "tags": ["出差"], "createdAt": 1790503493000
   } ],
   "total": 24, "page": 1, "pageSize": 20, "totalPages": 2
@@ -284,15 +285,19 @@
 
 ```jsonc
 {
-  "kind": "expense",          // 必填，expense | income
+  "kind": "expense",          // 必填，expense | income | transfer
   "amount": "32.80",          // 必填，最多两位小数的正数
   "categoryId": "cat_sys_expense_food",  // 可选，kind 必须与分类的 kind 一致
-  "accountId": "uuid",        // 可选，账户必须属于当前用户且未归档
+  "accountId": "uuid",        // 可选（转账必填），转出账户，须属于当前用户且未归档
+  "toAccountId": "uuid",      // 仅转账必填，转入账户，须与转出账户不同
   "note": "和同事聚餐",        // 可选，≤ 200 字
   "happenedOn": "2026-09-27", // 可选，默认今天（UTC+8）
   "tagIds": ["uuid"]          // 可选，≤ 10 个
 }
 ```
+
+转账是「转出账户 → 转入账户」的**单条记录**：`accountId` 为转出账户、`toAccountId` 为转入账户，
+金额恒为正数，且不支持分类（传 `categoryId` 会返回 400）。
 
 返回 201 `{ "data": { "transaction": TransactionDto } }`。
 
@@ -300,7 +305,9 @@
 
 ### `PATCH /api/transactions/:id`
 
-字段均可选；`categoryId` / `accountId` 可显式传 `null` 以清空关联。
+字段均可选；`categoryId` / `accountId` / `toAccountId` 可显式传 `null` 以清空关联。
+在 `expense` / `income` / `transfer` 之间切换时会自动维护字段互斥：
+转成转账会清空分类并校验转出/转入账户，转出转账会清空转入账户。
 
 ### `DELETE /api/transactions/:id`
 
@@ -310,21 +317,26 @@
 
 ## 7. 统计（用户端）
 
-### `GET /api/stats/summary?from=&to=`
+### `GET /api/stats/summary?from=&to=&compare=`
 
 ```jsonc
 { "data": {
   "from": "2026-08-29", "to": "2026-09-27",
   "incomeCents": 1200000, "expenseCents": 456780, "netCents": 743220,
-  "transactionCount": 24, "expenseCount": 20, "averageExpenseCents": 22839
+  "transactionCount": 24, "expenseCount": 20, "transferCount": 2, "averageExpenseCents": 22839,
+  "previous": null
 } }
 ```
 
 | 字段 | 说明 |
 | --- | --- |
-| `transactionCount` | 区间内全部笔数（含收入） |
+| `transactionCount` | 区间内**收支**笔数（含收入，**不含转账**） |
 | `expenseCount` | 区间内**支出**笔数 |
+| `transferCount` | 区间内**转账**笔数，单独计数，不计入收支 |
 | `averageExpenseCents` | 单笔平均支出，分母是 `expenseCount` 而非 `transactionCount`，避免被收入笔数摊薄 |
+| `previous` | `compare=1` 时为上一**同长度**周期（`{ from, to, incomeCents, expenseCents, netCents }`），否则为 `null` |
+
+`compare=1`（或 `true`）由服务端一次返回两期，前端不需要再发第二次请求。上期区间取本期起点前一天往前推同样天数，例如 `2026-09-01~2026-09-30` 的上期为 `2026-08-02~2026-08-31`。
 
 ### `GET /api/stats/trend?granularity=day|month&from=&to=`
 
@@ -340,19 +352,49 @@
 
 `granularity=month` 时返回 `{ "granularity": "month", "points": [...] }`，`day` 字段实际承载 `YYYY-MM`。
 
-### `GET /api/stats/by-category?kind=expense|income&from=&to=`
+### `GET /api/stats/by-category?kind=expense|income|all&dimension=category|tag&from=&to=&compare=`
 
 ```jsonc
 { "data": {
-  "from": "...", "to": "...", "kind": "expense", "totalCents": 456780,
+  "from": "...", "to": "...", "kind": "expense", "dimension": "category",
+  "totalCents": 456780, "previousTotalCents": null,
   "items": [ {
-    "categoryId": "cat_sys_expense_food", "name": "餐饮", "icon": "utensils",
-    "color": "#f97316", "amountCents": 32800, "transactionCount": 10, "percentage": 7.18
+    "id": "cat_sys_expense_food", "name": "餐饮", "icon": "utensils",
+    "color": "#f97316", "amountCents": 32800, "transactionCount": 10, "percentage": 7.18,
+    "previousAmountCents": null
   } ]
 } }
 ```
 
-`kind` 默认 `expense`。未分类账目的 `categoryId` 为 `null`，`name` 为「未分类」。
+| 参数 / 字段 | 说明 |
+| --- | --- |
+| `kind` | 默认 `expense`；`all` 表示**收支合并**口径（不加类型条件） |
+| `dimension=tag` | 按标签聚合，标签行的 `icon` 固定为 `tag`，未打标签的 `name` 为「未打标签」 |
+| `previousTotalCents` / `previousAmountCents` | `compare=1` 时给出上一同长度周期的合计与**各项**金额（上期没有该项时为 `0`）；未请求环比时均为 `null` |
+
+未分类账目的 `id` 为 `null`，`name` 为「未分类」。
+
+### `GET /api/stats/category?categoryId=&from=&to=&kind=expense|income`
+
+单个分类的详情指标（分类详情页用）。
+
+```jsonc
+{ "data": {
+  "from": "2026-01-01", "to": "2026-12-31", "kind": "expense",
+  "totalCents": 456780, "transactionCount": 24,
+  "averagePerTransactionCents": 19032, "averagePerMonthCents": 38065, "monthCount": 12,
+  "refundCents": 3200, "sharePercentage": 12.34
+} }
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `averagePerTransactionCents` | `totalCents / transactionCount`（四舍五入，笔数为 0 时为 0） |
+| `averagePerMonthCents` | `totalCents / monthCount`，`monthCount` 为区间覆盖的自然月数（含首尾） |
+| `refundCents` | 区间内**退款记录**中，来源支出属于该分类的金额合计（退款本身是收入记录、不带分类，故需回查来源） |
+| `sharePercentage` | 该分类金额占同期同类型总额的百分比 |
+
+`categoryId` 必填，缺失时返回 400。
 
 ### `GET /api/stats/overview`
 

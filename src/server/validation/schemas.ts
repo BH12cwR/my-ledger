@@ -33,20 +33,23 @@ const optionalNote = z
 export const amountSchema = z.union([z.string(), z.number()]);
 
 export const createTransactionSchema = z.object({
-  kind: categoryKindSchema,
+  kind: transactionKindSchema,
   amount: amountSchema,
   categoryId: optionalId,
   accountId: optionalId,
+  /** 转账的转入账户；仅 kind === 'transfer' 时有意义，跨字段不变式由服务层校验 */
+  toAccountId: optionalId,
   note: optionalNote,
   happenedOn: daySchema.optional(),
   tagIds: z.array(z.string().trim().min(1)).max(10, "最多关联 10 个标签").optional(),
 });
 
 export const updateTransactionSchema = z.object({
-  kind: categoryKindSchema.optional(),
+  kind: transactionKindSchema.optional(),
   amount: amountSchema.optional(),
   categoryId: optionalId,
   accountId: optionalId,
+  toAccountId: optionalId,
   note: optionalNote,
   happenedOn: daySchema.optional(),
   tagIds: z.array(z.string().trim().min(1)).max(10, "最多关联 10 个标签").optional(),
@@ -138,14 +141,27 @@ export const categoryListQuerySchema = z.object({
   kind: categoryKindSchema.optional(),
 });
 
+/** 统计维度上的数据类型：all 表示收支合并口径 */
+export const statsKindSchema = z.enum(["expense", "income", "all"], {
+  message: "统计类型只能是 expense / income / all",
+});
+
 export const statsQuerySchema = z.object({
   from: daySchema.optional(),
   to: daySchema.optional(),
-  kind: categoryKindSchema.default("expense"),
+  kind: statsKindSchema.default("expense"),
   /** 统计维度：按分类聚合或按标签聚合 */
   dimension: z.enum(["category", "tag"]).default("category"),
   categoryId: z.string().trim().min(1).optional(),
   tagId: z.string().trim().min(1).optional(),
+});
+
+/** 分类详情：必须指定分类，时间区间默认最近 30 天 */
+export const categoryDetailQuerySchema = z.object({
+  categoryId: z.string().trim().min(1, "缺少分类标识").max(64, "标识长度超出限制"),
+  from: daySchema.optional(),
+  to: daySchema.optional(),
+  kind: categoryKindSchema.default("expense"),
 });
 
 export const trendQuerySchema = z.object({

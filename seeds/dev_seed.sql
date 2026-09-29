@@ -63,7 +63,7 @@ INSERT OR IGNORE INTO tags (id, user_id, name, color, created_at, updated_at) VA
 -- ---------------------------------------------------------------------------
 INSERT OR IGNORE INTO transactions
   (id, user_id, account_id, category_id, kind, amount_cents, currency, note,
-   happened_at, happened_on, transfer_peer_id, created_at, updated_at, deleted_at)
+   happened_at, happened_on, to_account_id, created_at, updated_at, deleted_at)
 VALUES
   ('tx_demo_01', 'user_demo_0001', 'acc_demo_bank',   'cat_sys_income_salary',        'income',  1850000, 'CNY', '八月工资',
    (CAST(strftime('%s','now') AS INTEGER) - 28 * 86400) * 1000, date('now', '+8 hours', '-28 day'), NULL, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000, NULL),

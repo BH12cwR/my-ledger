@@ -145,7 +145,8 @@ export interface TransactionRecord {
   note: string | null;
   happened_at: number;
   happened_on: string;
-  transfer_peer_id: string | null;
+  /** 转账的转入账户；非转账为 NULL（account_id 此时是转出账户） */
+  to_account_id: string | null;
   /** 退款记录指向被退款的原始支出；普通账目为 NULL */
   refund_of_id: string | null;
   /** 该笔支出已被退款的时间戳；未退款为 NULL */

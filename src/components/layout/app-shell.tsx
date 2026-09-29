@@ -6,6 +6,7 @@ import { LoadingBlock } from "./states";
 import { BottomNav } from "./bottom-nav";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { useSession } from "@/components/providers/session-provider";
+import { cn } from "@/lib/utils";
 
 /**
  * 用户端外壳：负责登录守卫、页面容器与底部导航。
@@ -32,11 +33,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
+  // 记账页是全屏编辑器：底部被数字键盘占据，隐藏导航并去掉为其预留的下边距
+  const isEditor = pathname === "/transactions/new";
+
   return (
     <>
       <ServiceWorkerRegistrar />
-      <main className="mx-auto w-full max-w-2xl px-4 pt-6 pb-28">{children}</main>
-      <BottomNav />
+      <main className={cn("mx-auto w-full max-w-2xl px-4 pt-6", isEditor ? "pb-4" : "pb-28")}>
+        {children}
+      </main>
+      {isEditor ? null : <BottomNav />}
     </>
   );
 }

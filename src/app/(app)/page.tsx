@@ -2,241 +2,218 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Plus } from "lucide-react";
-import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
-import { CategoryIcon } from "@/components/category-icon";
-import { ErrorBlock, EmptyBlock, ListSkeleton, LoadingBlock } from "@/components/layout/states";
-import { TransactionRow } from "@/components/transaction-row";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, ChartPie, ChevronDown, Plus, UserRound } from "lucide-react";
+import { MonthSheet } from "@/components/date/date-sheet";
+import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
+import { WeeklyBars } from "@/components/stats/weekly-bars";
+import { GroupedList } from "@/components/transaction/grouped-list";
+import { SummaryHero } from "@/components/transaction/summary-hero";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { useApiQuery } from "@/lib/hooks";
-import type { DashboardOverview, Paginated, TransactionDto } from "@/lib/api";
+import {
+  api,
+  buildQuery,
+  errorMessage,
+  type Paginated,
+  type SummaryResult,
+  type TransactionDto,
+  type TrendPoint,
+} from "@/lib/api";
+import {
+  periodMonthOf,
+  resolveMonthRange,
+  shiftDay,
+  todayInBusinessTimezone,
+} from "@/lib/dates";
 import { money, monthLabel } from "@/lib/format";
+import { useApiQuery } from "@/lib/hooks";
+import { useMonthStartDay } from "@/lib/month-start-day";
 
-const OVERVIEW_PATH = "/api/stats/overview";
-const RECENT_PATH = "/api/transactions?pageSize=5";
+const PAGE_SIZE = 50;
 
 /**
- * 首页概览。
+ * 账单页：按账期月份聚合的主入口。
  *
- * 数据只来自两个接口：/api/stats/overview（本月/今日聚合）与 /api/transactions（最近账目）。
- * 所有金额都是「分」，展示前统一交给 money() 格式化。
+ * 三块数据各取所需：summary 出「月结余」大卡，trend 出最近七日的支出柱状，
+ * transactions 出当前账期的流水（按日分组 + 前端翻页）。
+ * 账期由「月份起始日」决定，起始日为 1 号时就是自然月。
  */
-export default function HomePage() {
+export default function BillPage() {
   const router = useRouter();
-  const overview = useApiQuery<DashboardOverview>(OVERVIEW_PATH);
-  const recent = useApiQuery<Paginated<TransactionDto>>(RECENT_PATH);
+  const today = todayInBusinessTimezone();
+  const [monthStartDay, setMonthStartDay] = useMonthStartDay();
+  // 用户手动选过月份后固定住，避免起始日异步加载完成时把默认月份改回去
+  const [monthOverride, setMonthOverride] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  if (overview.loading) return <LoadingBlock label="正在加载你的账本…" />;
+  const month = monthOverride ?? periodMonthOf(today, monthStartDay);
+  const range = useMemo(() => resolveMonthRange(month, monthStartDay), [month, monthStartDay]);
 
-  if (overview.error) {
-    return <ErrorBlock title="账本加载失败" description={overview.error} onRetry={overview.reload} />;
+  const summaryPath = `/api/stats/summary${buildQuery({ from: range.from, to: range.to })}`;
+  const trendPath = `/api/stats/trend${buildQuery({
+    granularity: "day",
+    from: shiftDay(today, -6),
+    to: today,
+  })}`;
+  const listPath = `/api/transactions${buildQuery({
+    from: range.from,
+    to: range.to,
+    page: 1,
+    pageSize: PAGE_SIZE,
+  })}`;
+
+  const summary = useApiQuery<SummaryResult>(summaryPath);
+  const trend = useApiQuery<{ granularity: "day"; points: TrendPoint[] }>(trendPath);
+  const list = useApiQuery<Paginated<TransactionDto>>(listPath);
+
+  // 翻页状态：page 为 0 表示「只有首屏那一页」，其余值记录已追加到的页码
+  const [extra, setExtra] = useState<{ page: number; items: TransactionDto[] }>({
+    page: 0,
+    items: [],
+  });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+
+  // 账期变化即清空已追加的页，否则会串到下一个月
+  useEffect(() => {
+    setExtra((prev) =>
+      prev.page === 0 && prev.items.length === 0 ? prev : { page: 0, items: [] },
+    );
+    setMoreError(null);
+  }, [listPath]);
+
+  const firstPageItems = list.data?.items ?? [];
+  const items = extra.page === 0 ? firstPageItems : [...firstPageItems, ...extra.items];
+  const loadedPages = extra.page === 0 ? 1 : extra.page;
+  const hasMore = loadedPages < (list.data?.totalPages ?? 1);
+
+  const weekPoints = trend.data?.points ?? [];
+  const weekTotal = weekPoints.reduce((sum, point) => sum + point.expenseCents, 0);
+
+  async function loadMore() {
+    const nextPage = extra.page === 0 ? 2 : extra.page + 1;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const result = await api.get<Paginated<TransactionDto>>(
+        `/api/transactions${buildQuery({
+          from: range.from,
+          to: range.to,
+          page: nextPage,
+          pageSize: PAGE_SIZE,
+        })}`,
+      );
+      setExtra((prev) => ({ page: nextPage, items: [...prev.items, ...result.items] }));
+    } catch (cause) {
+      setMoreError(errorMessage(cause));
+    } finally {
+      setLoadingMore(false);
+    }
   }
-
-  const month = overview.data?.month;
-  const today = overview.data?.today;
-  const topCategories = overview.data?.topCategories ?? [];
-  const budgets = overview.data?.budgets ?? [];
-  const recentItems = recent.data?.items ?? [];
 
   return (
     <div className="flex flex-col gap-5">
-      <Card>
-        <CardHeader>
-          <CardTitle>预算</CardTitle>
-          <CardAction>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/settings">
-                管理
-                <ArrowRight />
-              </Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {budgets.length === 0 ? (
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2">
-              <p className="text-xs text-muted-foreground">还没有设置预算，先为每月支出定个额度吧</p>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/settings">去设置</Link>
-              </Button>
-            </div>
-          ) : (
-            budgets.map((budget) => (
-              <div key={budget.id} className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <CategoryIcon name={budget.categoryIcon ?? "wallet"} color={budget.categoryColor} />
-                  <span className="flex-1 truncate text-sm">{budget.categoryName ?? "总预算"}</span>
-                  <span className="font-mono text-sm tabular-nums">
-                    {money(budget.spentCents)}
-                    <span className="text-muted-foreground"> / {money(budget.amountCents)}</span>
-                  </span>
-                </div>
-                <BudgetProgress percentage={budget.percentage} />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {budgetPeriodLabel(budget.period)} · 已用 {budget.percentage}%
-                  </span>
-                  <span className={budget.remainingCents < 0 ? "text-rose-600 dark:text-rose-400" : ""}>
-                    {budget.remainingCents < 0
-                      ? `超支 ${money(-budget.remainingCents)}`
-                      : `剩余 ${money(budget.remainingCents)}`}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      <header className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-lg font-medium transition-colors hover:bg-muted/60"
+        >
+          {monthLabel(month)}
+          <ChevronDown className="size-4 text-muted-foreground" />
+        </button>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{month ? `${monthLabel(month.from.slice(0, 7))}结余` : "本月结余"}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <p
-            className={`font-mono text-4xl font-semibold tabular-nums tracking-tight ${
-              (month?.netCents ?? 0) < 0 ? "text-rose-600 dark:text-rose-400" : ""
-            }`}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="选择日期"
+            onClick={() => setSheetOpen(true)}
           >
-            {money(month?.netCents ?? 0)}
-          </p>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg bg-muted/60 px-3 py-2">
-              <p className="text-xs text-muted-foreground">本月收入</p>
-              <p className="font-mono font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
-                {money(month?.incomeCents ?? 0)}
-              </p>
-            </div>
-            <div className="rounded-lg bg-muted/60 px-3 py-2">
-              <p className="text-xs text-muted-foreground">本月支出</p>
-              <p className="font-mono font-medium tabular-nums text-rose-600 dark:text-rose-400">
-                {money(month?.expenseCents ?? 0)}
-              </p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            本月共 {month?.transactionCount ?? 0} 笔 · 支出 {month?.expenseCount ?? 0} 笔 ·
-            单笔平均支出 {money(month?.averageExpenseCents ?? 0)}
-          </p>
-        </CardContent>
-      </Card>
+            <CalendarDays />
+          </Button>
+          <Button asChild variant="ghost" size="icon-sm">
+            <Link href="/stats" aria-label="统计">
+              <ChartPie />
+            </Link>
+          </Button>
+          <Button asChild variant="ghost" size="icon-sm">
+            <Link href="/settings" aria-label="我的">
+              <UserRound />
+            </Link>
+          </Button>
+        </div>
+      </header>
+
+      {summary.error ? (
+        <ErrorBlock
+          title="账期数据加载失败"
+          description={summary.error}
+          onRetry={summary.reload}
+        />
+      ) : (
+        <SummaryHero month={month} summary={summary.data} />
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>今日</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-3 gap-3 text-sm">
-          <Metric label="支出" value={money(today?.expenseCents ?? 0)} tone="expense" />
-          <Metric label="收入" value={money(today?.incomeCents ?? 0)} tone="income" />
-          <Metric label="笔数" value={`${today?.transactionCount ?? 0}`} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>本月支出 Top 5</CardTitle>
+          <CardTitle>最近七日支出</CardTitle>
           <CardAction>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/stats">
-                统计
-                <ArrowRight />
-              </Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {topCategories.length === 0 ? (
-            <p className="rounded-lg bg-muted/60 px-3 py-6 text-center text-xs text-muted-foreground">
-              本月还没有支出记录
-            </p>
-          ) : (
-            topCategories.map((item) => (
-              <div key={item.id ?? item.name} className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <CategoryIcon name={item.icon} color={item.color} />
-                  <span className="flex-1 truncate text-sm">{item.name}</span>
-                  <span className="font-mono text-sm tabular-nums">{money(item.amountCents)}</span>
-                  <span className="w-12 text-right text-xs text-muted-foreground">
-                    {item.percentage}%
-                  </span>
-                </div>
-                <Progress value={item.percentage} />
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>最近账目</CardTitle>
-          <CardAction>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/transactions">
-                全部
-                <ArrowRight />
-              </Link>
-            </Button>
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              共计 {money(weekTotal, "")}
+            </span>
           </CardAction>
         </CardHeader>
         <CardContent>
-          {recent.loading ? (
-            <ListSkeleton rows={3} />
-          ) : recentItems.length === 0 ? (
-            <EmptyBlock
-              title="还没有任何记录"
-              description="从「记一笔」开始，随手记下今天的收支"
-              action={
-                <Button asChild size="sm">
-                  <Link href="/transactions/new">
-                    <Plus />
-                    记一笔
-                  </Link>
-                </Button>
-              }
-            />
-          ) : (
-            <div className="flex flex-col divide-y divide-border/60">
-              {recentItems.map((item) => (
-                <TransactionRow
-                  key={item.id}
-                  transaction={item}
-                  onClick={() => router.push(`/transactions/new?id=${item.id}`)}
-                />
-              ))}
-            </div>
-          )}
+          {trend.loading ? <ListSkeleton rows={2} /> : <WeeklyBars points={weekPoints} />}
         </CardContent>
       </Card>
-    </div>
-  );
-}
 
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "income" | "expense";
-}) {
-  return (
-    <div className="rounded-lg bg-muted/60 px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={
-          tone === "income"
-            ? "font-mono font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
-            : tone === "expense"
-              ? "font-mono font-medium tabular-nums text-rose-600 dark:text-rose-400"
-              : "font-mono font-medium tabular-nums"
-        }
-      >
-        {value}
-      </p>
+      <section className="flex flex-col gap-3">
+        {list.loading ? (
+          <ListSkeleton rows={5} />
+        ) : list.error ? (
+          <ErrorBlock title="流水加载失败" description={list.error} onRetry={list.reload} />
+        ) : items.length === 0 ? (
+          <EmptyBlock
+            title="本月还没有记录"
+            description="从「记一笔」开始，随手记下今天的收支"
+            action={
+              <Button asChild size="sm">
+                <Link href="/transactions/new">
+                  <Plus />
+                  记一笔
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <GroupedList
+              items={items}
+              onSelect={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
+            />
+            {hasMore ? (
+              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "加载中…" : "加载更多"}
+              </Button>
+            ) : null}
+            {moreError ? (
+              <p className="text-center text-xs text-destructive">{moreError}</p>
+            ) : null}
+          </>
+        )}
+      </section>
+
+      <MonthSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        value={month}
+        onSelect={setMonthOverride}
+        monthStartDay={monthStartDay}
+        onMonthStartDayChange={setMonthStartDay}
+      />
     </div>
   );
 }

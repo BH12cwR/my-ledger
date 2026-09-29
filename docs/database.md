@@ -27,7 +27,7 @@
 users ──┬── accounts ──┐
         │              ├── transactions ──── transaction_tags ──── tags
         ├── categories ┘         │                               │
-        │                        └── (transfer_peer_id 自关联)    │
+        │                        └── (to_account_id → accounts，转账转入)│
         ├── tags ───────────────────────────────────────────────┘
         ├── budgets (category_id → categories，可空表示总预算)
         └── sessions (principal_type = 'user')
@@ -201,13 +201,13 @@ audit_logs（user / admin / system 三类主体共用）
 | `user_id` | TEXT | NOT NULL，`REFERENCES users(id) ON DELETE CASCADE` | |
 | `account_id` | TEXT | `REFERENCES accounts(id) ON DELETE SET NULL` | 账户删除后账目保留 |
 | `category_id` | TEXT | `REFERENCES categories(id) ON DELETE SET NULL` | 分类删除后账目保留 |
-| `kind` | TEXT | `CHECK IN ('expense','income','transfer')` | 转账为后续能力预留，当前 API 只开放前者 |
+| `kind` | TEXT | `CHECK IN ('expense','income','transfer')` | 支出 / 收入 / 转账 |
 | `amount_cents` | INTEGER | NOT NULL，`CHECK (amount_cents > 0)` | **恒为正数**，方向由 `kind` 决定 |
 | `currency` | TEXT | 默认 `CNY` | |
 | `note` | TEXT | | |
 | `happened_at` | INTEGER | NOT NULL | 精确时刻（毫秒） |
 | `happened_on` | TEXT | NOT NULL | 业务日 `YYYY-MM-DD`（UTC+8） |
-| `transfer_peer_id` | TEXT | | 转账对手方账目 id（预留自关联） |
+| `to_account_id` | TEXT | `REFERENCES accounts(id) ON DELETE SET NULL` | 转账的**转入账户**；非转账为 NULL（此时 `account_id` 是转出账户） |
 | `created_at` / `updated_at` | INTEGER | NOT NULL | |
 | `deleted_at` | INTEGER | | **软删除**；所有业务查询都带 `deleted_at IS NULL` |
 
@@ -219,6 +219,7 @@ audit_logs（user / admin / system 三类主体共用）
 | `idx_transactions_user_day` | `(user_id, happened_on) WHERE deleted_at IS NULL` | 按日趋势 / 今日汇总 |
 | `idx_transactions_user_category` | `(user_id, category_id, happened_on) WHERE deleted_at IS NULL` | 分类结构占比 |
 | `idx_transactions_user_account` | `(user_id, account_id) WHERE deleted_at IS NULL` | 账户余额汇总 |
+| `idx_transactions_to_account` | `(to_account_id) WHERE to_account_id IS NOT NULL` | 转账转入侧的余额汇总 |
 
 `amount_cents > 0` 与 `kind` 分离的设计让「求和」逻辑统一：
 收入求和直接 `SUM`，支出求和也直接 `SUM`，方向只在展示与净值计算时按 `kind` 区分。
@@ -287,6 +288,8 @@ audit_logs（user / admin / system 三类主体共用）
 | [0002_system_categories.sql](../migrations/0002_system_categories.sql) | 19 条内置分类参照数据 |
 | [0003_user_password_login.sql](../migrations/0003_user_password_login.sql) | `users` 增补账号密码登录字段（`username` / `password_hash` / 失败锁定） |
 | [0004_budgets.sql](../migrations/0004_budgets.sql) | `budgets` 表 + 唯一索引 + 辅助索引 |
+| [0005_transaction_refund.sql](../migrations/0005_transaction_refund.sql) | `transactions` 增补退款字段（`refund_of_id` / `refunded_at`）+ 部分索引 |
+| [0006_transfer.sql](../migrations/0006_transfer.sql) | `transactions` 新增 `to_account_id`（转入账户）并删除闲置的 `transfer_peer_id` + 部分索引 |
 
 `wrangler.toml` 中通过 `migrations_dir = "migrations"` 声明目录：
 

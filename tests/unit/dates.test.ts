@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   countDaysInclusive,
+  countMonthsInclusive,
   fromBusinessDay,
   isValidDay,
+  previousRange,
   resolveBudgetPeriodRange,
   resolveDayRange,
   shiftDay,
@@ -71,6 +73,40 @@ describe("countDaysInclusive", () => {
     expect(countDaysInclusive("2026-09-01", "2026-09-30")).toBe(30);
     expect(countDaysInclusive("2026-09-27", "2026-09-27")).toBe(1);
     expect(countDaysInclusive("2026-08-31", "2026-09-01")).toBe(2);
+  });
+});
+
+describe("previousRange", () => {
+  it("取紧邻的等长区间", () => {
+    expect(previousRange("2026-09-01", "2026-09-30")).toEqual({
+      from: "2026-08-02",
+      to: "2026-08-31",
+    });
+    expect(previousRange("2026-09-27", "2026-09-27")).toEqual({
+      from: "2026-09-26",
+      to: "2026-09-26",
+    });
+  });
+
+  it("跨年时仍保持天数一致", () => {
+    const range = previousRange("2026-01-01", "2026-01-31");
+    expect(range).toEqual({ from: "2025-12-01", to: "2025-12-31" });
+    expect(countDaysInclusive(range.from, range.to)).toBe(31);
+  });
+
+  it("整年区间落到上一年", () => {
+    const range = previousRange("2026-01-01", "2026-12-31");
+    expect(countDaysInclusive(range.from, range.to)).toBe(365);
+    expect(range.to).toBe("2025-12-31");
+  });
+});
+
+describe("countMonthsInclusive", () => {
+  it("包含首尾月份", () => {
+    expect(countMonthsInclusive("2026-09-05", "2026-09-20")).toBe(1);
+    expect(countMonthsInclusive("2026-09-05", "2026-10-04")).toBe(2);
+    expect(countMonthsInclusive("2026-01-01", "2026-12-31")).toBe(12);
+    expect(countMonthsInclusive("2025-11-01", "2026-02-28")).toBe(4);
   });
 });
 

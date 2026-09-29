@@ -294,3 +294,166 @@ describe("deleteTransaction", () => {
     await expect(deleteTransaction(db, user.id, created.id, NOW)).rejects.toBeInstanceOf(ApiError);
   });
 });
+
+describe("转账", () => {
+  it("创建转账：落库为单条记录，带转入账户且不含分类", async () => {
+    const user = await makeUser("openid-a");
+    const [from, to] = await listAccounts(db, user.id);
+
+    const created = await createTransaction(
+      db,
+      user.id,
+      { kind: "transfer", amount: "30.00", accountId: from.id, toAccountId: to.id, note: "转到微信" },
+      NOW,
+    );
+
+    expect(created.kind).toBe("transfer");
+    expect(created.amount_cents).toBe(3000);
+    expect(created.account_id).toBe(from.id);
+    expect(created.account_name).toBe(from.name);
+    expect(created.to_account_id).toBe(to.id);
+    expect(created.to_account_name).toBe(to.name);
+    expect(created.category_id).toBeNull();
+    expect(created.category_name).toBeNull();
+  });
+
+  it("缺转出/缺转入/同账户互转/携带分类均抛 400", async () => {
+    const user = await makeUser("openid-a");
+    const [from, to] = await listAccounts(db, user.id);
+    const category = await makeCategory(user.id, "伙食", "expense");
+
+    await expect(
+      createTransaction(db, user.id, { kind: "transfer", amount: "1.00", toAccountId: to.id }, NOW),
+    ).rejects.toMatchObject({ status: 400 });
+
+    await expect(
+      createTransaction(db, user.id, { kind: "transfer", amount: "1.00", accountId: from.id }, NOW),
+    ).rejects.toMatchObject({ status: 400 });
+
+    await expect(
+      createTransaction(
+        db,
+        user.id,
+        { kind: "transfer", amount: "1.00", accountId: from.id, toAccountId: from.id },
+        NOW,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+
+    await expect(
+      createTransaction(
+        db,
+        user.id,
+        { kind: "transfer", amount: "1.00", accountId: from.id, toAccountId: to.id, categoryId: category.id },
+        NOW,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("非转账携带转入账户抛 400", async () => {
+    const user = await makeUser("openid-a");
+    const [, to] = await listAccounts(db, user.id);
+
+    await expect(
+      createTransaction(db, user.id, { kind: "expense", amount: "1.00", toAccountId: to.id }, NOW),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("转入账户不属于当前用户时抛 400", async () => {
+    const userA = await makeUser("openid-a");
+    const [fromA] = await listAccounts(db, userA.id);
+    const userB = await makeUser("openid-b");
+    const [accountB] = await listAccounts(db, userB.id);
+
+    await expect(
+      createTransaction(
+        db,
+        userA.id,
+        { kind: "transfer", amount: "1.00", accountId: fromA.id, toAccountId: accountB.id },
+        NOW,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("支出改为转账会清空分类并写入转入账户", async () => {
+    const user = await makeUser("openid-a");
+    const [from, to] = await listAccounts(db, user.id);
+    const category = await makeCategory(user.id, "伙食", "expense");
+    const created = await createTransaction(
+      db,
+      user.id,
+      { kind: "expense", amount: "10.00", categoryId: category.id, accountId: from.id },
+      NOW,
+    );
+
+    const updated = await updateTransaction(
+      db,
+      user.id,
+      created.id,
+      { kind: "transfer", toAccountId: to.id },
+      NOW,
+    );
+
+    expect(updated.kind).toBe("transfer");
+    expect(updated.category_id).toBeNull();
+    expect(updated.category_name).toBeNull();
+    expect(updated.to_account_id).toBe(to.id);
+    expect(updated.to_account_name).toBe(to.name);
+  });
+
+  it("转账改为支出会清空转入账户", async () => {
+    const user = await makeUser("openid-a");
+    const [from, to] = await listAccounts(db, user.id);
+    const category = await makeCategory(user.id, "伙食", "expense");
+    const created = await createTransaction(
+      db,
+      user.id,
+      { kind: "transfer", amount: "10.00", accountId: from.id, toAccountId: to.id },
+      NOW,
+    );
+
+    const updated = await updateTransaction(
+      db,
+      user.id,
+      created.id,
+      { kind: "expense", categoryId: category.id },
+      NOW,
+    );
+
+    expect(updated.kind).toBe("expense");
+    expect(updated.to_account_id).toBeNull();
+    expect(updated.to_account_name).toBeNull();
+    expect(updated.category_id).toBe(category.id);
+  });
+
+  it("只改备注时保留转入账户", async () => {
+    const user = await makeUser("openid-a");
+    const [from, to] = await listAccounts(db, user.id);
+    const created = await createTransaction(
+      db,
+      user.id,
+      { kind: "transfer", amount: "10.00", accountId: from.id, toAccountId: to.id },
+      NOW,
+    );
+
+    const updated = await updateTransaction(db, user.id, created.id, { note: "补个说明" }, NOW);
+
+    expect(updated.note).toBe("补个说明");
+    expect(updated.kind).toBe("transfer");
+    expect(updated.to_account_id).toBe(to.id);
+  });
+
+  it("编辑转账时把转入账户改成转出账户抛 400", async () => {
+    const user = await makeUser("openid-a");
+    const [from, to] = await listAccounts(db, user.id);
+    const created = await createTransaction(
+      db,
+      user.id,
+      { kind: "transfer", amount: "10.00", accountId: from.id, toAccountId: to.id },
+      NOW,
+    );
+
+    await expect(
+      updateTransaction(db, user.id, created.id, { toAccountId: from.id }, NOW),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});

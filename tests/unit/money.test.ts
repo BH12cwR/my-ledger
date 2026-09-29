@@ -3,6 +3,7 @@ import {
   AmountError,
   MAX_AMOUNT_CENTS,
   centsToInputValue,
+  evaluateAmountExpression,
   formatCents,
   parseAmountToCents,
 } from "@/lib/money";
@@ -108,5 +109,39 @@ describe("centsToInputValue", () => {
     expect(centsToInputValue(0)).toBe("0.00");
     expect(centsToInputValue(123456)).toBe("1234.56");
     expect(centsToInputValue(-123456)).toBe("-1234.56");
+  });
+});
+
+describe("evaluateAmountExpression", () => {
+  it("单段金额等价于 parseAmountToCents", () => {
+    expect(evaluateAmountExpression("12.34")).toBe(1234);
+    expect(evaluateAmountExpression("0")).toBe(0);
+  });
+
+  it("按从左到右的顺序累加同级运算符", () => {
+    expect(evaluateAmountExpression("12.30+5-3")).toBe(1430);
+    expect(evaluateAmountExpression("100-30-20")).toBe(5000);
+  });
+
+  it("忽略末尾悬空的运算符与小数点", () => {
+    expect(evaluateAmountExpression("12.30+")).toBe(1230);
+    expect(evaluateAmountExpression("12.30+5-")).toBe(1730);
+    expect(evaluateAmountExpression("12.")).toBe(1200);
+  });
+
+  it("结果可以是 0 或负数，交由调用方判断", () => {
+    expect(evaluateAmountExpression("5-5")).toBe(0);
+    expect(evaluateAmountExpression("5-8")).toBe(-300);
+  });
+
+  it("空表达式与格式错误抛 AmountError", () => {
+    expect(() => evaluateAmountExpression("")).toThrow(AmountError);
+    expect(() => evaluateAmountExpression("+")).toThrow(AmountError);
+    expect(() => evaluateAmountExpression("12+abc")).toThrow(AmountError);
+    expect(() => evaluateAmountExpression("12+1.234")).toThrow(AmountError);
+  });
+
+  it("超出上限时抛 AmountError", () => {
+    expect(() => evaluateAmountExpression("9999999999.99+0.01")).toThrow(AmountError);
   });
 });

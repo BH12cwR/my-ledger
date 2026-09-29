@@ -22,6 +22,8 @@ export interface TransactionView extends TransactionRecord {
   category_color: string | null;
   account_name: string | null;
   account_type: string | null;
+  /** 转账的转入账户名；非转账为 null */
+  to_account_name: string | null;
   tags: string[];
   /** 仅在管理端跨用户查询时填充 */
   user_nickname?: string | null;
@@ -107,11 +109,13 @@ function selectView(includeUser = false): string {
          c.icon  AS category_icon,
          c.color AS category_color,
          a.name  AS account_name,
-         a.type  AS account_type${includeUser ? `,
+         a.type  AS account_type,
+         ta.name AS to_account_name${includeUser ? `,
          u.nickname AS user_nickname` : ""}
     FROM transactions t
     LEFT JOIN categories c ON c.id = t.category_id
-    LEFT JOIN accounts   a ON a.id = t.account_id${includeUser ? `
+    LEFT JOIN accounts   a ON a.id = t.account_id
+    LEFT JOIN accounts   ta ON ta.id = t.to_account_id${includeUser ? `
     LEFT JOIN users      u ON u.id = t.user_id` : ""}
 `;
 }
@@ -213,13 +217,24 @@ export async function createTransaction(
   const { happenedAt, happenedOn } = resolveHappenedAt(input.happenedOn, now);
   const amountCents = toCents(input.amount);
 
-  if (input.categoryId) {
-    const category = await assertCategoryAccessible(db, userId, input.categoryId);
-    if (category.kind !== input.kind) {
-      throw ApiError.badRequest("分类类型与账目类型不一致");
+  if (input.kind === "transfer") {
+    // 转账是「转出账户 → 转入账户」的单条记录，不带分类
+    if (input.categoryId) throw ApiError.badRequest("转账不支持分类");
+    if (!input.accountId) throw ApiError.badRequest("请选择转出账户");
+    if (!input.toAccountId) throw ApiError.badRequest("请选择转入账户");
+    if (input.accountId === input.toAccountId) throw ApiError.badRequest("转出与转入账户不能相同");
+    await assertAccountAccessible(db, userId, input.accountId);
+    await assertAccountAccessible(db, userId, input.toAccountId);
+  } else {
+    if (input.toAccountId) throw ApiError.badRequest("只有转账支持转入账户");
+    if (input.categoryId) {
+      const category = await assertCategoryAccessible(db, userId, input.categoryId);
+      if (category.kind !== input.kind) {
+        throw ApiError.badRequest("分类类型与账目类型不一致");
+      }
     }
+    if (input.accountId) await assertAccountAccessible(db, userId, input.accountId);
   }
-  if (input.accountId) await assertAccountAccessible(db, userId, input.accountId);
 
   const tagIds = input.tagIds ?? [];
   await assertTagsAccessible(db, userId, tagIds);
@@ -228,15 +243,16 @@ export async function createTransaction(
   await db
     .prepare(
       `INSERT INTO transactions
-         (id, user_id, account_id, category_id, kind, amount_cents, currency, note,
-          happened_at, happened_on, transfer_peer_id, created_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'CNY', ?, ?, ?, NULL, ?, ?, NULL)`,
+         (id, user_id, account_id, category_id, to_account_id, kind, amount_cents, currency, note,
+          happened_at, happened_on, created_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'CNY', ?, ?, ?, ?, ?, NULL)`,
     )
     .bind(
       id,
       userId,
       input.accountId ?? null,
       input.categoryId ?? null,
+      input.toAccountId ?? null,
       input.kind,
       amountCents,
       input.note ?? null,
@@ -280,9 +296,9 @@ export async function refundTransaction(
       .prepare(
         `INSERT INTO transactions
            (id, user_id, account_id, category_id, kind, amount_cents, currency, note,
-            happened_at, happened_on, transfer_peer_id, refund_of_id, refunded_at,
+            happened_at, happened_on, refund_of_id, refunded_at,
             created_at, updated_at, deleted_at)
-         VALUES (?, ?, ?, NULL, 'income', ?, 'CNY', ?, ?, ?, NULL, ?, NULL, ?, ?, NULL)`,
+         VALUES (?, ?, ?, NULL, 'income', ?, 'CNY', ?, ?, ?, ?, NULL, ?, ?, NULL)`,
       )
       .bind(id, userId, origin.account_id, origin.amount_cents, note, now, happenedOn, origin.id, now, now),
     db
@@ -307,7 +323,7 @@ export async function refundTransaction(
     note,
     happened_at: now,
     happened_on: happenedOn,
-    transfer_peer_id: null,
+    to_account_id: null,
     refund_of_id: origin.id,
     refunded_at: null,
     created_at: now,
@@ -339,23 +355,33 @@ export async function updateTransaction(
       input.amount !== undefined ||
       input.categoryId !== undefined ||
       input.accountId !== undefined ||
+      input.toAccountId !== undefined ||
       input.happenedOn !== undefined)
   ) {
     throw ApiError.badRequest("已退款的支出不支持修改金额、类型、分类、账户或日期");
   }
 
   const nextKind = input.kind ?? existing.kind;
+  // 合并后的账户状态：转账要求转出与转入账户都有效且互不相同
+  const nextAccountId = input.accountId !== undefined ? input.accountId : existing.account_id;
+  const nextToAccountId = input.toAccountId !== undefined ? input.toAccountId : existing.to_account_id;
 
-  if (input.categoryId !== undefined) {
-    if (input.categoryId === null) {
-      // 允许清空分类
-    } else {
+  if (nextKind === "transfer") {
+    if (input.categoryId) throw ApiError.badRequest("转账不支持分类");
+    if (!nextAccountId) throw ApiError.badRequest("请选择转出账户");
+    if (!nextToAccountId) throw ApiError.badRequest("请选择转入账户");
+    if (nextAccountId === nextToAccountId) throw ApiError.badRequest("转出与转入账户不能相同");
+    if (input.accountId) await assertAccountAccessible(db, userId, input.accountId);
+    if (input.toAccountId) await assertAccountAccessible(db, userId, input.toAccountId);
+  } else {
+    if (input.toAccountId) throw ApiError.badRequest("只有转账支持转入账户");
+    if (input.categoryId !== undefined && input.categoryId !== null) {
       const category = await assertCategoryAccessible(db, userId, input.categoryId);
       if (category.kind !== nextKind) throw ApiError.badRequest("分类类型与账目类型不一致");
     }
-  }
-  if (input.accountId !== undefined && input.accountId !== null) {
-    await assertAccountAccessible(db, userId, input.accountId);
+    if (input.accountId !== undefined && input.accountId !== null) {
+      await assertAccountAccessible(db, userId, input.accountId);
+    }
   }
   if (input.tagIds !== undefined) await assertTagsAccessible(db, userId, input.tagIds);
 
@@ -368,13 +394,21 @@ export async function updateTransaction(
 
   if (input.kind !== undefined) push("kind", input.kind);
   if (input.amount !== undefined) push("amount_cents", toCents(input.amount));
-  if (input.categoryId !== undefined) push("category_id", input.categoryId ?? null);
-  if (input.accountId !== undefined) push("account_id", input.accountId ?? null);
   if (input.note !== undefined) push("note", input.note ?? null);
   if (input.happenedOn !== undefined) {
     const resolved = resolveHappenedAt(input.happenedOn, now);
     push("happened_at", resolved.happenedAt);
     push("happened_on", resolved.happenedOn);
+  }
+  if (input.accountId !== undefined) push("account_id", input.accountId ?? null);
+  // 分类与转入账户互斥：转账清空分类，非转账清空转入账户；
+  // 同一列只 push 一次，避免 SQLite 对重复 SET 列的行为不确定。
+  if (nextKind === "transfer") {
+    push("category_id", null);
+    if (input.toAccountId !== undefined) push("to_account_id", input.toAccountId ?? null);
+  } else {
+    push("to_account_id", null);
+    if (input.categoryId !== undefined) push("category_id", input.categoryId ?? null);
   }
   push("updated_at", now);
 

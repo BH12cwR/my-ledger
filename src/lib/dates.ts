@@ -44,6 +44,24 @@ export function countDaysInclusive(fromDay: string, toDay: string): number {
   return Math.round((fromBusinessDay(toDay) - fromBusinessDay(fromDay)) / DAY_MS) + 1;
 }
 
+/**
+ * 紧邻 [from, to] 之前的等长区间，用于「环比」。
+ * 起点对齐到 to 的前一天往前推，保证与本期天数完全一致
+ * （2026-09-01~2026-09-30 → 2026-08-02~2026-08-31）。
+ */
+export function previousRange(fromDay: string, toDay: string): { from: string; to: string } {
+  const length = countDaysInclusive(fromDay, toDay);
+  const previousTo = shiftDay(fromDay, -1);
+  return { from: shiftDay(previousTo, -(length - 1)), to: previousTo };
+}
+
+/** [from, to] 覆盖的自然月数量（含首尾），用于「平均每月」 */
+export function countMonthsInclusive(fromDay: string, toDay: string): number {
+  const [fromYear, fromMonth] = monthOf(fromDay).split("-").map(Number);
+  const [toYear, toMonth] = monthOf(toDay).split("-").map(Number);
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth) + 1;
+}
+
 /** 校验并规整起止日期，默认返回最近 30 天 */
 export function resolveDayRange(from?: string | null, to?: string | null): { from: string; to: string } {
   const today = todayInBusinessTimezone();
@@ -67,4 +85,82 @@ export function resolveBudgetPeriodRange(
 ): { from: string; to: string } {
   const from = period === "yearly" ? `${today.slice(0, 4)}-01-01` : `${today.slice(0, 7)}-01`;
   return { from, to: today };
+}
+
+// ---------------------------------------------------------------------------
+// 账期：以「月份起始日」重新定义一个月
+// ---------------------------------------------------------------------------
+
+/** 月份起始日默认值：1 号，此时账期等价自然月 */
+export const DEFAULT_MONTH_START_DAY = 1;
+
+/** 起始日上限 28，保证每个月都存在该日（2 月也不会缺日） */
+export const MAX_MONTH_START_DAY = 28;
+
+/** 把任意输入规整为合法的月份起始日（1–28），非法值回落到默认值 */
+export function normalizeMonthStartDay(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_MONTH_START_DAY) {
+    return DEFAULT_MONTH_START_DAY;
+  }
+  return parsed;
+}
+
+/** YYYY-MM-DD → YYYY-MM */
+export function monthOf(day: string): string {
+  return day.slice(0, 7);
+}
+
+/** 月份加减：YYYY-MM 偏移 N 个月后仍是 YYYY-MM */
+export function shiftMonth(month: string, deltaMonths: number): string {
+  const [year, value] = month.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, value - 1 + deltaMonths, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** 某个 YYYY-MM 的天数 */
+export function daysInMonth(month: string): number {
+  const [year, value] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, value, 0)).getUTCDate();
+}
+
+/** 取某月第 day 天；超出当月天数时收敛到当月最后一天 */
+function monthDay(month: string, day: number): string {
+  const clamped = Math.min(day, daysInMonth(month));
+  return `${month}-${String(clamped).padStart(2, "0")}`;
+}
+
+/**
+ * 按「月份起始日」把账期解析为闭区间 [from, to]。
+ * startDay = 1 时即自然月；startDay = 5 时 2026-09 表示 2026-09-05 ~ 2026-10-04。
+ */
+export function resolveMonthRange(
+  month: string,
+  startDay = DEFAULT_MONTH_START_DAY,
+): { from: string; to: string } {
+  const day = normalizeMonthStartDay(startDay);
+  const from = monthDay(month, day);
+  const next = monthDay(shiftMonth(month, 1), day);
+  return { from, to: shiftDay(next, -1) };
+}
+
+/** 某一天归属的账期月份（YYYY-MM），与 resolveMonthRange 互为逆运算 */
+export function periodMonthOf(day: string, startDay = DEFAULT_MONTH_START_DAY): string {
+  const start = normalizeMonthStartDay(startDay);
+  if (start === 1) return monthOf(day);
+  return Number(day.slice(8, 10)) >= start ? monthOf(day) : shiftMonth(monthOf(day), -1);
+}
+
+/** 星期序号：0 = 周日 … 6 = 周六 */
+export function weekdayOf(day: string): number {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date)).getUTCDay();
+}
+
+/** 相对日文案：今天 / 昨天 / 前天，其余返回 null */
+export function relativeDayLabel(day: string, today = todayInBusinessTimezone()): string | null {
+  if (day === today) return "今天";
+  if (day === shiftDay(today, -1)) return "昨天";
+  if (day === shiftDay(today, -2)) return "前天";
+  return null;
 }

@@ -4,10 +4,11 @@ import { createTestDb } from "../helpers/d1";
 import { upsertWechatUser } from "@/server/services/users";
 import { createAccount } from "@/server/services/accounts";
 import { createCategory } from "@/server/services/categories";
-import { createTransaction, deleteTransaction, listTransactions } from "@/server/services/transactions";
+import { createTransaction, deleteTransaction, listTransactions, refundTransaction } from "@/server/services/transactions";
 import {
   getAccountBalances,
   getCategoryBreakdown,
+  getCategoryDetail,
   getDailyTrend,
   getSummary,
 } from "@/server/services/stats";
@@ -17,6 +18,7 @@ const NOW = Date.UTC(2026, 8, 27, 16, 30);
 let db: Db;
 let userId: string;
 let bankAccountId: string;
+let foodCategoryId: string;
 
 async function makeCategory(name: string, kind: "expense" | "income") {
   return createCategory(db, userId, { name, kind, icon: "tag", color: "#64748b", sortOrder: 0 });
@@ -41,6 +43,7 @@ beforeEach(async () => {
   bankAccountId = bank.id;
 
   const food = await makeCategory("餐饮", "expense");
+  foodCategoryId = food.id;
   const transport = await makeCategory("交通", "expense");
   const salary = await makeCategory("工资", "income");
 
@@ -183,5 +186,194 @@ describe("getAccountBalances", () => {
     expect(bank).toBeDefined();
     expect(bank?.balanceCents).toBe(16300); // 10000 + 10300 - 4000
     expect(bank?.transactionCount).toBe(5);
+  });
+});
+
+describe("环比（compare）", () => {
+  it("summary 带出上一同长度周期，本期与上期区间相邻", async () => {
+    const summary = await getSummary(
+      db,
+      userId,
+      { from: "2026-09-01", to: "2026-09-15" },
+      { compare: true },
+    );
+    expect(summary.previous).toEqual({
+      from: "2026-08-17",
+      to: "2026-08-31",
+      incomeCents: 0,
+      expenseCents: 0,
+      netCents: 0,
+    });
+  });
+
+  it("未请求环比时 previous 为 null", async () => {
+    const summary = await getSummary(db, userId, { from: "2026-09-01", to: "2026-09-15" });
+    expect(summary.previous).toBeNull();
+  });
+
+  it("上期有数据时给出上期合计", async () => {
+    await createTransaction(
+      db,
+      userId,
+      { kind: "expense", amount: "10.00", categoryId: foodCategoryId, happenedOn: "2026-08-20" },
+      NOW,
+    );
+
+    const summary = await getSummary(
+      db,
+      userId,
+      { from: "2026-09-01", to: "2026-09-15" },
+      { compare: true },
+    );
+    expect(summary.previous?.expenseCents).toBe(1000);
+    expect(summary.previous?.netCents).toBe(-1000);
+    // 上期账目不影响本期
+    expect(summary.expenseCents).toBe(4000);
+  });
+});
+
+describe("结构占比 · 全部口径与环比", () => {
+  it("kind=all 合并收支计算占比", async () => {
+    const result = await getCategoryBreakdown(db, userId, {
+      from: "2026-09-01",
+      to: "2026-09-15",
+      kind: "all",
+    });
+
+    expect(result.kind).toBe("all");
+    expect(result.totalCents).toBe(14300); // 支出 4000 + 收入 10300
+    expect(result.items.map((item) => item.name)).toEqual(["工资", "餐饮", "交通"]);
+  });
+
+  it("compare 同时给出上期合计与各项金额", async () => {
+    await createTransaction(
+      db,
+      userId,
+      { kind: "expense", amount: "10.00", categoryId: foodCategoryId, happenedOn: "2026-08-20" },
+      NOW,
+    );
+
+    const result = await getCategoryBreakdown(db, userId, {
+      from: "2026-09-01",
+      to: "2026-09-15",
+      compare: true,
+    });
+
+    expect(result.previousTotalCents).toBe(1000);
+    expect(result.items.find((item) => item.name === "餐饮")?.previousAmountCents).toBe(1000);
+    // 上期没有该项时补 0，而不是 null（null 表示「没有环比数据」）
+    expect(result.items.find((item) => item.name === "交通")?.previousAmountCents).toBe(0);
+  });
+
+  it("未请求环比时 previousAmountCents 为 null", async () => {
+    const result = await getCategoryBreakdown(db, userId, {
+      from: "2026-09-01",
+      to: "2026-09-15",
+    });
+    expect(result.previousTotalCents).toBeNull();
+    expect(result.items.every((item) => item.previousAmountCents === null)).toBe(true);
+  });
+});
+
+describe("getCategoryDetail", () => {
+  it("给出总额、笔数、平均每笔、平均每月与占比", async () => {
+    const detail = await getCategoryDetail(db, userId, {
+      categoryId: foodCategoryId,
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+
+    expect(detail.totalCents).toBe(2500); // 20.00 + 5.00
+    expect(detail.transactionCount).toBe(2);
+    expect(detail.averagePerTransactionCents).toBe(1250);
+    expect(detail.monthCount).toBe(1);
+    expect(detail.averagePerMonthCents).toBe(2500);
+    expect(detail.sharePercentage).toBe(62.5); // 2500 / 4000
+    expect(detail.refundCents).toBe(0);
+  });
+
+  it("平均每月按区间覆盖的月数摊分", async () => {
+    const detail = await getCategoryDetail(db, userId, {
+      categoryId: foodCategoryId,
+      from: "2026-09-01",
+      to: "2026-10-31",
+    });
+    expect(detail.monthCount).toBe(2);
+    expect(detail.averagePerMonthCents).toBe(1250); // 2500 / 2
+  });
+
+  it("退款合计只统计来源支出属于该分类的退款", async () => {
+    const list = await listTransactions(db, userId, {
+      page: 1,
+      pageSize: 100,
+      from: "2026-09-15",
+      to: "2026-09-15",
+      kind: "expense",
+    });
+    await refundTransaction(db, userId, list.items[0].id, NOW);
+
+    const detail = await getCategoryDetail(db, userId, {
+      categoryId: foodCategoryId,
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+
+    expect(detail.refundCents).toBe(500);
+    // 退款是收入记录，不会冲减该分类的支出金额
+    expect(detail.totalCents).toBe(2500);
+    expect(detail.transactionCount).toBe(2);
+  });
+});
+
+describe("转账口径", () => {
+  async function makeWallet() {
+    return createAccount(db, userId, {
+      name: "微信钱包",
+      type: "wechat",
+      icon: "wallet",
+      initialBalance: "0.00",
+      sortOrder: 1,
+    });
+  }
+
+  it("转账对转出账户扣减、对转入账户增加，并各计一笔流水", async () => {
+    const wallet = await makeWallet();
+    await createTransaction(
+      db,
+      userId,
+      { kind: "transfer", amount: "30.00", accountId: bankAccountId, toAccountId: wallet.id, happenedOn: "2026-09-12" },
+      NOW,
+    );
+
+    const balances = await getAccountBalances(db, userId);
+    const bank = balances.find((item) => item.id === bankAccountId);
+    const target = balances.find((item) => item.id === wallet.id);
+
+    expect(bank?.balanceCents).toBe(13300); // 16300 - 3000
+    expect(bank?.transactionCount).toBe(6);
+    expect(target?.balanceCents).toBe(3000);
+    expect(target?.transactionCount).toBe(1);
+  });
+
+  it("转账不计入收支，但单独计入 transferCount", async () => {
+    const wallet = await makeWallet();
+    await createTransaction(
+      db,
+      userId,
+      { kind: "transfer", amount: "30.00", accountId: bankAccountId, toAccountId: wallet.id, happenedOn: "2026-09-12" },
+      NOW,
+    );
+
+    const summary = await getSummary(db, userId, { from: "2026-09-01", to: "2026-09-30" });
+    expect(summary.incomeCents).toBe(10300);
+    expect(summary.expenseCents).toBe(4000);
+    expect(summary.transactionCount).toBe(5); // 不含转账
+    expect(summary.transferCount).toBe(1);
+  });
+
+  it("无转账时 transferCount 为 0", async () => {
+    const summary = await getSummary(db, userId, { from: "2026-09-01", to: "2026-09-15" });
+    expect(summary.transferCount).toBe(0);
+    expect(summary.transactionCount).toBe(5);
   });
 });

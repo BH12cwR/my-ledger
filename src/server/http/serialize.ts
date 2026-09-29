@@ -144,6 +144,9 @@ export interface TransactionDto {
   accountId: string | null;
   accountName: string | null;
   accountType: string | null;
+  /** 转账的转入账户；非转账为 null */
+  toAccountId: string | null;
+  toAccountName: string | null;
   tags: string[];
   /** 该笔支出被退款的时间戳；未退款为 null */
   refundedAt: number | null;
@@ -171,6 +174,8 @@ export function transactionDto(view: TransactionView): TransactionDto {
     accountId: view.account_id,
     accountName: view.account_name,
     accountType: view.account_type,
+    toAccountId: view.to_account_id,
+    toAccountName: view.to_account_name,
     tags: view.tags,
     refundedAt: view.refunded_at,
     refundOfId: view.refund_of_id,

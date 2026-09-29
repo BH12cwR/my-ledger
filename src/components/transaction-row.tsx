@@ -13,23 +13,39 @@ import type { TransactionDto } from "@/lib/api";
 export function TransactionRow({
   transaction,
   showUser = false,
+  grouped = false,
   onClick,
 }: {
   transaction: TransactionDto;
   showUser?: boolean;
+  /** 账单页按日分组的场景：日期由分组头给出，行内不再重复，账户名移到金额下方 */
+  grouped?: boolean;
   onClick?: () => void;
 }) {
   const isIncome = transaction.kind === "income";
-  const title = transaction.categoryName ?? (isIncome ? "收入" : "支出");
+  const isTransfer = transaction.kind === "transfer";
+  // 转账没有分类，用「转出 → 转入」代替分类名，一眼看清方向
+  const title = isTransfer
+    ? transaction.accountName && transaction.toAccountName
+      ? `${transaction.accountName} → ${transaction.toAccountName}`
+      : "转账"
+    : transaction.categoryName ?? (isIncome ? "收入" : "支出");
   const subtitleParts = [
     transaction.note,
-    transaction.accountName,
+    // 转账的账户名已并入标题，非分组时普通账目才在副标题重复账户
+    isTransfer || grouped ? null : transaction.accountName,
     showUser ? transaction.userNickname ?? transaction.userId : null,
   ].filter((part): part is string => Boolean(part));
+  const subtitle = subtitleParts.join(" · ");
   // 移动端一行放不下太多标签，最多展示 2 个，其余折叠为 +N
   const visibleTags = transaction.tags.slice(0, 2);
   const hiddenTagCount = transaction.tags.length - visibleTags.length;
   const refunded = !isIncome && transaction.refundedAt !== null;
+  const amountTone = isTransfer
+    ? "text-blue-600 dark:text-blue-400"
+    : isIncome
+      ? "text-emerald-600 dark:text-emerald-400"
+      : "text-rose-600 dark:text-rose-400";
 
   return (
     <button
@@ -43,7 +59,10 @@ export function TransactionRow({
     >
       <CategoryBadge
         icon={transaction.categoryIcon}
-        color={transaction.categoryColor ?? (isIncome ? "#22c55e" : "#94a3b8")}
+        color={
+          transaction.categoryColor ??
+          (isTransfer ? "#3b82f6" : isIncome ? "#22c55e" : "#94a3b8")
+        }
       />
 
       <div className="min-w-0 flex-1">
@@ -68,22 +87,25 @@ export function TransactionRow({
             </Badge>
           ) : null}
         </div>
-        <p className="truncate text-xs text-muted-foreground">
-          {subtitleParts.length > 0 ? subtitleParts.join(" · ") : transaction.happenedOn}
-        </p>
+        {subtitle.length > 0 ? (
+          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+        ) : grouped ? null : (
+          <p className="truncate text-xs text-muted-foreground">{transaction.happenedOn}</p>
+        )}
       </div>
 
       <div className="shrink-0 text-right">
-        <p
-          className={cn(
-            "font-mono text-sm tabular-nums",
-            isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-foreground",
-          )}
-        >
-          {isIncome ? "+" : "-"}
+        <p className={cn("font-mono text-sm tabular-nums", amountTone)}>
+          {isTransfer ? "" : isIncome ? "+" : "-"}
           {money(transaction.amountCents)}
         </p>
-        <p className="text-[11px] text-muted-foreground">{transaction.happenedOn.slice(5)}</p>
+        {grouped ? (
+          transaction.accountName && !isTransfer ? (
+            <p className="text-[11px] text-muted-foreground">{transaction.accountName}</p>
+          ) : null
+        ) : (
+          <p className="text-[11px] text-muted-foreground">{transaction.happenedOn.slice(5)}</p>
+        )}
       </div>
     </button>
   );

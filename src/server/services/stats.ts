@@ -1,5 +1,11 @@
 import type { Db } from "../db/types";
-import { resolveDayRange, shiftDay, todayInBusinessTimezone } from "@/lib/dates";
+import {
+  countMonthsInclusive,
+  previousRange,
+  resolveDayRange,
+  shiftDay,
+  todayInBusinessTimezone,
+} from "@/lib/dates";
 import { allRows, shareOfTotal } from "./common";
 import { getBudgetOverview } from "./budgets";
 
@@ -10,16 +16,30 @@ import { getBudgetOverview } from "./budgets";
  * 既保证精度也避免大数据量下的函数内存与执行时间开销。
  */
 
+/** 环比用的上一同长度周期汇总 */
+export interface SummaryComparison {
+  from: string;
+  to: string;
+  incomeCents: number;
+  expenseCents: number;
+  netCents: number;
+}
+
 export interface SummaryResult {
   from: string;
   to: string;
   incomeCents: number;
   expenseCents: number;
   netCents: number;
+  /** 区间内的收支笔数（不含转账） */
   transactionCount: number;
   /** 区间内的支出笔数。平均支出以此为分母，与 transactionCount（含收入）区分开 */
   expenseCount: number;
+  /** 区间内的转账笔数，单独计数，不计入收支 */
+  transferCount: number;
   averageExpenseCents: number;
+  /** 上一同长度周期的汇总；未请求环比时为 null */
+  previous: SummaryComparison | null;
 }
 
 export interface TrendPoint {
@@ -38,15 +58,37 @@ export interface CategoryBreakdownItem {
   amountCents: number;
   transactionCount: number;
   percentage: number;
+  /** 上一同长度周期的同项金额；未请求环比时为 null */
+  previousAmountCents: number | null;
 }
+
+/** 结构占比的数据类型：「全部」表示收支合并口径 */
+export type BreakdownKind = "expense" | "income" | "all";
 
 export interface CategoryBreakdownResult {
   from: string;
   to: string;
-  kind: "expense" | "income";
+  kind: BreakdownKind;
   dimension: "category" | "tag";
   totalCents: number;
+  /** 上一同长度周期的合计；未请求环比时为 null */
+  previousTotalCents: number | null;
   items: CategoryBreakdownItem[];
+}
+
+/** 分类详情页的指标（稿 9）：总额、笔数、平均每笔、平均每月、退款 */
+export interface CategoryDetailResult {
+  from: string;
+  to: string;
+  kind: "expense" | "income";
+  totalCents: number;
+  transactionCount: number;
+  averagePerTransactionCents: number;
+  averagePerMonthCents: number;
+  monthCount: number;
+  refundCents: number;
+  /** 该分类金额占同期同类型总额的百分比 */
+  sharePercentage: number;
 }
 
 export interface AccountBalanceItem {
@@ -97,6 +139,8 @@ function buildSummary(
   expenseCents: number,
   transactionCount: number,
   expenseCount: number,
+  transferCount: number,
+  previous: SummaryComparison | null = null,
 ): SummaryResult {
   return {
     from,
@@ -106,47 +150,92 @@ function buildSummary(
     netCents: incomeCents - expenseCents,
     transactionCount,
     expenseCount,
+    transferCount,
     // 平均支出只按支出笔数摊分，否则会被收入笔数拉低
     averageExpenseCents: expenseCount > 0 ? Math.round(expenseCents / expenseCount) : 0,
+    previous,
   };
 }
 
-export async function getSummary(
+type SummaryAggregateRow = {
+  income_cents: number;
+  expense_cents: number;
+  transaction_count: number;
+  expense_count: number;
+  transfer_count: number;
+};
+
+/** 单区间的收支聚合。本期与环比上期复用同一段 SQL，避免两处口径漂移 */
+async function aggregateSummary(
   db: Db,
   userId: string,
-  range: StatsFilter = {},
-): Promise<SummaryResult> {
-  const { from, to } = resolveDayRange(range.from, range.to);
-
+  from: string,
+  to: string,
+  filter: StatsFilter,
+): Promise<SummaryAggregateRow> {
   const conditions: string[] = [];
   const params: unknown[] = [];
-  appendFilters(conditions, params, userId, from, to, range);
+  appendFilters(conditions, params, userId, from, to, filter);
 
   const row = await db
     .prepare(
       `SELECT
          COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
          COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents,
-         COUNT(*) AS transaction_count,
-         COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS expense_count
+         COALESCE(SUM(CASE WHEN t.kind IN ('expense', 'income') THEN 1 ELSE 0 END), 0) AS transaction_count,
+         COALESCE(SUM(CASE WHEN t.kind = 'expense'  THEN 1 ELSE 0 END), 0) AS expense_count,
+         COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count
        FROM transactions t
        WHERE ${conditions.join(" AND ")}`,
     )
     .bind(...params)
-    .first<{
-      income_cents: number;
-      expense_cents: number;
-      transaction_count: number;
-      expense_count: number;
-    }>();
+    .first<SummaryAggregateRow>();
+
+  return {
+    income_cents: row?.income_cents ?? 0,
+    expense_cents: row?.expense_cents ?? 0,
+    transaction_count: row?.transaction_count ?? 0,
+    expense_count: row?.expense_count ?? 0,
+    transfer_count: row?.transfer_count ?? 0,
+  };
+}
+
+/**
+ * 区间汇总。
+ * `options.compare` 为真时额外查询「上一同长度周期」，由服务端一次返回两期，
+ * 前端不需要再发一次请求（决策 5）。
+ */
+export async function getSummary(
+  db: Db,
+  userId: string,
+  range: StatsFilter = {},
+  options: { compare?: boolean } = {},
+): Promise<SummaryResult> {
+  const { from, to } = resolveDayRange(range.from, range.to);
+  const current = await aggregateSummary(db, userId, from, to, range);
+
+  let previous: SummaryComparison | null = null;
+  if (options.compare) {
+    const prev = previousRange(from, to);
+    const stats = await aggregateSummary(db, userId, prev.from, prev.to, range);
+    previous = {
+      from: prev.from,
+      to: prev.to,
+      incomeCents: stats.income_cents,
+      expenseCents: stats.expense_cents,
+      netCents: stats.income_cents - stats.expense_cents,
+    };
+  }
 
   return buildSummary(
     from,
     to,
-    row?.income_cents ?? 0,
-    row?.expense_cents ?? 0,
-    row?.transaction_count ?? 0,
-    row?.expense_count ?? 0,
+    current.income_cents,
+    current.expense_cents,
+    current.transaction_count,
+    current.expense_count,
+    current.transfer_count,
+    previous,
   );
 }
 
@@ -226,34 +315,48 @@ export async function getMonthlyTrend(
   }));
 }
 
-export async function getCategoryBreakdown(
+/** 结构占比的原始聚合行，分类与标签两种维度共用 */
+interface BreakdownRow {
+  id: string | null;
+  name: string | null;
+  icon: string | null;
+  color: string | null;
+  amount_cents: number;
+  transaction_count: number;
+}
+
+/**
+ * 单个区间的结构聚合。
+ * kind 为 all 时不加类型条件，收支合并计算（统计页「全部」分段）。
+ */
+async function queryBreakdownRows(
   db: Db,
   userId: string,
-  options: StatsFilter & { kind?: "expense" | "income"; dimension?: "category" | "tag" } = {},
-): Promise<CategoryBreakdownResult> {
-  const { from, to } = resolveDayRange(options.from, options.to);
-  const kind = options.kind ?? "expense";
-  const dimension = options.dimension ?? "category";
-
+  options: {
+    from: string;
+    to: string;
+    kind: BreakdownKind;
+    dimension: "category" | "tag";
+    categoryId?: string;
+    tagId?: string;
+  },
+): Promise<BreakdownRow[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
-  appendFilters(conditions, params, userId, from, to, options);
-  conditions.push(`t.kind = ?`);
-  params.push(kind);
+  appendFilters(conditions, params, userId, options.from, options.to, options);
+  if (options.kind !== "all") {
+    conditions.push(`t.kind = ?`);
+    params.push(options.kind);
+  }
   const where = conditions.join(" AND ");
 
-  if (dimension === "tag") {
-    const rows = await allRows<{
-      id: string | null;
-      name: string | null;
-      color: string | null;
-      amount_cents: number;
-      transaction_count: number;
-    }>(
+  if (options.dimension === "tag") {
+    return allRows<BreakdownRow>(
       db
         .prepare(
           `SELECT tg.id   AS id,
                   tg.name AS name,
+                  'tag'   AS icon,
                   tg.color AS color,
                   COALESCE(SUM(t.amount_cents), 0) AS amount_cents,
                   COUNT(DISTINCT t.id) AS transaction_count
@@ -266,34 +369,9 @@ export async function getCategoryBreakdown(
         )
         .bind(...params),
     );
-
-    const totalCents = rows.reduce((sum, row) => sum + row.amount_cents, 0);
-    return {
-      from,
-      to,
-      kind,
-      dimension,
-      totalCents,
-      items: rows.map((row) => ({
-        id: row.id,
-        name: row.name ?? "未打标签",
-        icon: "tag",
-        color: row.color ?? "#94a3b8",
-        amountCents: row.amount_cents,
-        transactionCount: row.transaction_count,
-        percentage: shareOfTotal(row.amount_cents, totalCents),
-      })),
-    };
   }
 
-  const rows = await allRows<{
-    id: string | null;
-    name: string | null;
-    icon: string | null;
-    color: string | null;
-    amount_cents: number;
-    transaction_count: number;
-  }>(
+  return allRows<BreakdownRow>(
     db
       .prepare(
         `SELECT t.category_id AS id,
@@ -310,8 +388,37 @@ export async function getCategoryBreakdown(
       )
       .bind(...params),
   );
+}
 
+/**
+ * 结构占比。
+ * `options.compare` 为真时同时给出上一同长度周期的合计与各项金额，供排行行的环比徽章使用。
+ */
+export async function getCategoryBreakdown(
+  db: Db,
+  userId: string,
+  options: StatsFilter & {
+    kind?: BreakdownKind;
+    dimension?: "category" | "tag";
+    compare?: boolean;
+  } = {},
+): Promise<CategoryBreakdownResult> {
+  const { from, to } = resolveDayRange(options.from, options.to);
+  const kind = options.kind ?? "expense";
+  const dimension = options.dimension ?? "category";
+  const scope = { dimension, categoryId: options.categoryId, tagId: options.tagId };
+
+  const rows = await queryBreakdownRows(db, userId, { from, to, kind, ...scope });
   const totalCents = rows.reduce((sum, row) => sum + row.amount_cents, 0);
+
+  let previousTotalCents: number | null = null;
+  let previousById: Map<string | null, number> | null = null;
+  if (options.compare) {
+    const prev = previousRange(from, to);
+    const previousRows = await queryBreakdownRows(db, userId, { ...prev, kind, ...scope });
+    previousTotalCents = previousRows.reduce((sum, row) => sum + row.amount_cents, 0);
+    previousById = new Map(previousRows.map((row) => [row.id, row.amount_cents]));
+  }
 
   return {
     from,
@@ -319,19 +426,87 @@ export async function getCategoryBreakdown(
     kind,
     dimension,
     totalCents,
+    previousTotalCents,
     items: rows.map((row) => ({
       id: row.id,
-      name: row.name ?? "未分类",
+      name: row.name ?? (dimension === "tag" ? "未打标签" : "未分类"),
       icon: row.icon ?? "circle-help",
       color: row.color ?? "#94a3b8",
       amountCents: row.amount_cents,
       transactionCount: row.transaction_count,
       percentage: shareOfTotal(row.amount_cents, totalCents),
+      previousAmountCents: previousById ? (previousById.get(row.id) ?? 0) : null,
     })),
   };
 }
 
-/** 账户余额 = 初始余额 + 收入 - 支出 */
+/**
+ * 分类详情指标（稿 9）。
+ *
+ * 「平均每月」按区间覆盖的自然月数摊分；「退款合计」统计区间内退款记录中
+ * 来源支出属于该分类的部分（退款本身是收入记录，不带分类）。
+ */
+export async function getCategoryDetail(
+  db: Db,
+  userId: string,
+  options: { categoryId: string; from?: string; to?: string; kind?: "expense" | "income" },
+): Promise<CategoryDetailResult> {
+  const { from, to } = resolveDayRange(options.from, options.to);
+  const kind = options.kind ?? "expense";
+
+  const [totals, refund, period] = await Promise.all([
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(t.amount_cents), 0) AS total_cents,
+                COUNT(*) AS transaction_count
+           FROM transactions t
+          WHERE t.user_id = ? AND t.deleted_at IS NULL
+            AND t.kind = ? AND t.category_id = ?
+            AND t.happened_on BETWEEN ? AND ?`,
+      )
+      .bind(userId, kind, options.categoryId, from, to)
+      .first<{ total_cents: number; transaction_count: number }>(),
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(r.amount_cents), 0) AS refund_cents
+           FROM transactions r
+           JOIN transactions o ON o.id = r.refund_of_id
+          WHERE r.user_id = ? AND r.deleted_at IS NULL
+            AND o.category_id = ?
+            AND r.happened_on BETWEEN ? AND ?`,
+      )
+      .bind(userId, options.categoryId, from, to)
+      .first<{ refund_cents: number }>(),
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(t.amount_cents), 0) AS total_cents
+           FROM transactions t
+          WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.kind = ?
+            AND t.happened_on BETWEEN ? AND ?`,
+      )
+      .bind(userId, kind, from, to)
+      .first<{ total_cents: number }>(),
+  ]);
+
+  const totalCents = totals?.total_cents ?? 0;
+  const transactionCount = totals?.transaction_count ?? 0;
+  const monthCount = countMonthsInclusive(from, to);
+
+  return {
+    from,
+    to,
+    kind,
+    totalCents,
+    transactionCount,
+    averagePerTransactionCents: transactionCount > 0 ? Math.round(totalCents / transactionCount) : 0,
+    averagePerMonthCents: monthCount > 0 ? Math.round(totalCents / monthCount) : 0,
+    monthCount,
+    refundCents: refund?.refund_cents ?? 0,
+    sharePercentage: shareOfTotal(totalCents, period?.total_cents ?? 0),
+  };
+}
+
+/** 账户余额 = 初始余额 + 收入 - 支出；转账对转出账户扣减、对转入账户增加 */
 export async function getAccountBalances(
   db: Db,
   userId: string,
@@ -349,27 +524,35 @@ export async function getAccountBalances(
   }>(
     db
       .prepare(
-        `SELECT a.id AS id,
+        // 转账在 account_id（转出）与 to_account_id（转入）两侧各产生一条资金流，
+        // 用 UNION ALL 展平成 (账户, 变动额) 后再逐账户聚合。
+        `WITH flows AS (
+           SELECT t.account_id AS account_id,
+                  CASE t.kind
+                    WHEN 'income'  THEN t.amount_cents
+                    WHEN 'expense' THEN -t.amount_cents
+                    ELSE -t.amount_cents
+                  END AS delta
+             FROM transactions t
+            WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.account_id IS NOT NULL
+           UNION ALL
+           SELECT t.to_account_id AS account_id, t.amount_cents AS delta
+             FROM transactions t
+            WHERE t.user_id = ? AND t.deleted_at IS NULL
+              AND t.kind = 'transfer' AND t.to_account_id IS NOT NULL
+         )
+         SELECT a.id AS id,
                 a.name AS name,
                 a.type AS type,
                 a.icon AS icon,
                 a.initial_balance_cents AS initial_balance_cents,
-                COALESCE(SUM(
-                  CASE t.kind
-                    WHEN 'income'  THEN t.amount_cents
-                    WHEN 'expense' THEN -t.amount_cents
-                    ELSE 0
-                  END
-                ), 0) AS net_cents,
-                COUNT(t.id) AS transaction_count
+                COALESCE((SELECT SUM(f.delta) FROM flows f WHERE f.account_id = a.id), 0) AS net_cents,
+                (SELECT COUNT(*) FROM flows f WHERE f.account_id = a.id) AS transaction_count
            FROM accounts a
-           LEFT JOIN transactions t
-                  ON t.account_id = a.id AND t.deleted_at IS NULL
           WHERE a.user_id = ? ${where}
-          GROUP BY a.id
           ORDER BY a.sort_order ASC, a.created_at ASC`,
       )
-      .bind(userId),
+      .bind(userId, userId, userId),
   );
 
   return rows.map((row) => ({
@@ -388,32 +571,36 @@ export async function getDashboardOverview(db: Db, userId: string) {
   const monthStart = `${today.slice(0, 7)}-01`;
 
   // 本月与今日共用一次表扫描：今日指标由 CASE WHEN 在 SELECT 中派生。
-  // 注意绑参顺序——SELECT 中的 4 个「今日」占位符排在 WHERE 参数之前。
+  // 注意绑参顺序——SELECT 中的 5 个「今日」占位符排在 WHERE 参数之前。
   const [summaryRow, breakdown, budgets] = await Promise.all([
     db
       .prepare(
         `SELECT
            COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
            COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents,
-           COUNT(*) AS transaction_count,
-           COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS expense_count,
+           COALESCE(SUM(CASE WHEN t.kind IN ('expense', 'income') THEN 1 ELSE 0 END), 0) AS transaction_count,
+           COALESCE(SUM(CASE WHEN t.kind = 'expense'  THEN 1 ELSE 0 END), 0) AS expense_count,
+           COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count,
            COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0) AS today_income_cents,
            COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS today_expense_cents,
-           COALESCE(SUM(CASE WHEN t.happened_on = ? THEN 1 ELSE 0 END), 0) AS today_transaction_count,
-           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS today_expense_count
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind IN ('expense', 'income') THEN 1 ELSE 0 END), 0) AS today_transaction_count,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS today_expense_count,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS today_transfer_count
          FROM transactions t
         WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.happened_on BETWEEN ? AND ?`,
       )
-      .bind(today, today, today, today, userId, monthStart, today)
+      .bind(today, today, today, today, today, userId, monthStart, today)
       .first<{
         income_cents: number;
         expense_cents: number;
         transaction_count: number;
         expense_count: number;
+        transfer_count: number;
         today_income_cents: number;
         today_expense_cents: number;
         today_transaction_count: number;
         today_expense_count: number;
+        today_transfer_count: number;
       }>(),
     getCategoryBreakdown(db, userId, { from: monthStart, to: today, kind: "expense" }),
     getBudgetOverview(db, userId, today),
@@ -427,6 +614,7 @@ export async function getDashboardOverview(db: Db, userId: string) {
       summaryRow?.expense_cents ?? 0,
       summaryRow?.transaction_count ?? 0,
       summaryRow?.expense_count ?? 0,
+      summaryRow?.transfer_count ?? 0,
     ),
     today: buildSummary(
       today,
@@ -435,6 +623,7 @@ export async function getDashboardOverview(db: Db, userId: string) {
       summaryRow?.today_expense_cents ?? 0,
       summaryRow?.today_transaction_count ?? 0,
       summaryRow?.today_expense_count ?? 0,
+      summaryRow?.today_transfer_count ?? 0,
     ),
     topCategories: breakdown.items.slice(0, 5),
     budgets,

@@ -21,6 +21,8 @@ import type { Paginated } from "@/server/services/common";
 import type {
   AccountBalanceItem,
   CategoryBreakdownItem,
+  CategoryDetailResult,
+  SummaryComparison,
   SummaryResult,
   TrendPoint,
 } from "@/server/services/stats";
@@ -69,9 +71,11 @@ export type CategoryBreakdownDimension = "category" | "tag";
 export interface CategoryBreakdownResponse {
   from: string;
   to: string;
-  kind: "expense" | "income";
+  kind: "expense" | "income" | "all";
   dimension: CategoryBreakdownDimension;
   totalCents: number;
+  /** 上一同长度周期的合计；未请求环比时为 null */
+  previousTotalCents: number | null;
   items: CategoryBreakdownItem[];
 }
 
@@ -80,7 +84,17 @@ export interface PlatformTrendResponse {
   points: Array<{ day: string; newUsers: number; transactions: number; amountCents: number }>;
 }
 
-export type { AccountBalanceItem, BudgetConfigDto, BudgetView, CategoryBreakdownItem, OverviewMetrics, SummaryResult, TrendPoint };
+export type {
+  AccountBalanceItem,
+  BudgetConfigDto,
+  BudgetView,
+  CategoryBreakdownItem,
+  CategoryDetailResult,
+  OverviewMetrics,
+  SummaryComparison,
+  SummaryResult,
+  TrendPoint,
+};
 
 // ---------------------------------------------------------------------------
 // 请求封装
