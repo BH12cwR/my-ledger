@@ -261,8 +261,9 @@
 | `from` / `to` | 互相推导，默认最近 30 天 | `YYYY-MM-DD` |
 | `kind` | — | `expense` / `income` / `transfer` |
 | `categoryId` | — | 精确匹配 |
-| `accountId` | — | 精确匹配 |
-| `keyword` | — | 模糊匹配备注或分类名，最长 50 字 |
+| `accountId` | — | 精确匹配**账户的两端**：命中 `accountId`（转出）或 `toAccountId`（转入）。转账对两端余额都有影响，只看转出会让流入该账户的转账消失 |
+| `keyword` | — | 模糊匹配备注 / 分类名 / **金额**（按「元」保留两位小数后匹配，整数或小数都能命中），最长 50 字 |
+| `sort` | `desc` | `desc` 由近到远 / `asc` 由远到近 |
 | `page` | 1 | ≥ 1 |
 | `pageSize` | 20 | 1 - 100 |
 
@@ -312,6 +313,39 @@
 ### `DELETE /api/transactions/:id`
 
 **软删除**：写入 `deleted_at`，统计口径可追溯、误删可恢复。
+
+### `GET /api/transactions/summary`
+
+搜索账单页「搜索汇总」卡。**参数与 `GET /api/transactions` 完全一致**（只是不分页、不排序），
+两者共用同一段 WHERE，因此 `total` 必然等于同条件下列表的 `total`。
+账户明细页（`/assets/[id]`）同样复用它，以 `accountId` 取单账户的累计收支。
+
+```jsonc
+{ "data": {
+  "from": "2026-09-01", "to": "2026-09-30",
+  "total": 4,
+  "expenseCents": 10000, "incomeCents": 40000, "netCents": 30000,
+  "transferCents": 5000, "refundCents": 10000
+} }
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `total` | 命中筛选条件的账目总数（**含转账与退款记录**），与列表一致 |
+| `expenseCents` / `incomeCents` / `netCents` | 收支与结余，**不含转账** |
+| `transferCents` | 转账金额合计，单独成项 |
+| `refundCents` | 退款记录金额合计（即 `refund_of_id IS NOT NULL` 的收入记录）。退款恒为收入，带上 `kind` 过滤就永远统计不到，因此**该项忽略 `kind`**，只跟时间 / 分类 / 标签 / 账户 / 关键字有关 |
+| `from` / `to` | 直接回显请求参数，未限定时为 `null` |
+
+### `GET /api/transactions/range`
+
+当前用户全部账目的最早 / 最晚业务日，自定义筛选页用它渲染「2025年~2026年」这枚由数据决定跨度的快捷项。
+
+```jsonc
+{ "data": { "firstDay": "2025-03-04", "lastDay": "2026-09-07" } }
+```
+
+没有任何账目时两天均为 `null`。软删除的账目不参与统计。
 
 ---
 
@@ -557,9 +591,10 @@
 
 禁用时会**立即吊销该用户的全部会话**并写入审计日志（`admin.user.disable`）。
 
-### `GET /api/admin/transactions?userId=&kind=&from=&to=&keyword=&page=&pageSize=`
+### `GET /api/admin/transactions?userId=&kind=&from=&to=&keyword=&sort=&page=&pageSize=`
 
 跨用户只读监控。`userId` 为空表示不限用户；响应中的账目会**额外携带** `userId` 与 `userNickname`。
+过滤参数与用户端的 `GET /api/transactions` 完全一致（含 `keyword` 的金额匹配与 `sort`）。
 
 ### `GET /api/admin/audit-logs?action=&actorType=&page=&pageSize=`
 

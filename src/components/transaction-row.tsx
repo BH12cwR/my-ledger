@@ -13,13 +13,24 @@ import type { TransactionDto } from "@/lib/api";
 export function TransactionRow({
   transaction,
   showUser = false,
-  grouped = false,
+  groupBy = "none",
+  showAccount = true,
   onClick,
 }: {
   transaction: TransactionDto;
   showUser?: boolean;
-  /** 账单页按日分组的场景：日期由分组头给出，行内不再重复，账户名移到金额下方 */
-  grouped?: boolean;
+  /**
+   * 分组粒度，决定日期与账户名各自出现在哪里：
+   *  - `none`：不分组，副标题放备注 · 账户，金额下方放日期；
+   *  - `day`：按日分组，日期已由组头给出，行内不再重复，账户名移到金额下方；
+   *  - `month`：按月分组，组头只有年月，行内必须保留日期（`09-27 快递费`）。
+   */
+  groupBy?: "none" | "day" | "month";
+  /**
+   * 是否在金额下方重复账户名。账户明细页里整页都是同一个账户，
+   * 逐行重复只是噪音，那里会关掉它。
+   */
+  showAccount?: boolean;
   onClick?: () => void;
 }) {
   const isIncome = transaction.kind === "income";
@@ -30,10 +41,13 @@ export function TransactionRow({
       ? `${transaction.accountName} → ${transaction.toAccountName}`
       : "转账"
     : transaction.categoryName ?? (isIncome ? "收入" : "支出");
+  // 只有不分组时账户名才挤在副标题里，分组场景一律移到金额下方
+  const accountInline = groupBy === "none";
   const subtitleParts = [
+    groupBy === "month" ? transaction.happenedOn : null,
     transaction.note,
-    // 转账的账户名已并入标题，非分组时普通账目才在副标题重复账户
-    isTransfer || grouped ? null : transaction.accountName,
+    // 转账的账户名已并入标题，普通账目才在副标题重复账户
+    isTransfer || !accountInline ? null : transaction.accountName,
     showUser ? transaction.userNickname ?? transaction.userId : null,
   ].filter((part): part is string => Boolean(part));
   const subtitle = subtitleParts.join(" · ");
@@ -89,9 +103,9 @@ export function TransactionRow({
         </div>
         {subtitle.length > 0 ? (
           <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-        ) : grouped ? null : (
+        ) : groupBy === "none" ? (
           <p className="truncate text-xs text-muted-foreground">{transaction.happenedOn}</p>
-        )}
+        ) : null}
       </div>
 
       <div className="shrink-0 text-right">
@@ -99,13 +113,11 @@ export function TransactionRow({
           {isTransfer ? "" : isIncome ? "+" : "-"}
           {money(transaction.amountCents)}
         </p>
-        {grouped ? (
-          transaction.accountName && !isTransfer ? (
-            <p className="text-[11px] text-muted-foreground">{transaction.accountName}</p>
-          ) : null
-        ) : (
+        {groupBy === "none" ? (
           <p className="text-[11px] text-muted-foreground">{transaction.happenedOn.slice(5)}</p>
-        )}
+        ) : showAccount && transaction.accountName && !isTransfer ? (
+          <p className="text-[11px] text-muted-foreground">{transaction.accountName}</p>
+        ) : null}
       </div>
     </button>
   );

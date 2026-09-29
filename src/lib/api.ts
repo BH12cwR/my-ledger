@@ -26,6 +26,7 @@ import type {
   SummaryResult,
   TrendPoint,
 } from "@/server/services/stats";
+import type { TransactionsSummary } from "@/server/services/transactions";
 import type { BudgetConfigDto, BudgetView } from "@/server/services/budgets";
 import type { OverviewMetrics } from "@/server/services/admin";
 
@@ -68,6 +69,15 @@ export type TrendResponse =
 
 export type CategoryBreakdownDimension = "category" | "tag";
 
+/** 账目最早 / 最晚业务日，用于自定义筛选页的动态年份 chip */
+export interface TransactionDateRange {
+  firstDay: string | null;
+  lastDay: string | null;
+}
+
+/** 账目查询的排序方向 */
+export type TransactionSort = "desc" | "asc";
+
 export interface CategoryBreakdownResponse {
   from: string;
   to: string;
@@ -93,6 +103,7 @@ export type {
   OverviewMetrics,
   SummaryComparison,
   SummaryResult,
+  TransactionsSummary,
   TrendPoint,
 };
 

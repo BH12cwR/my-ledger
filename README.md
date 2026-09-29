@@ -24,10 +24,12 @@
 src/
 ├── app/
 │   ├── (app)/                # 用户端（route group，不影响 URL）
-│   │   ├── page.tsx          #   首页概览
-│   │   ├── transactions/     #   明细列表 / 记一笔（含编辑）
-│   │   ├── stats/            #   Recharts 趋势与结构图
-│   │   └── settings/         #   账户 / 分类 / 标签
+│   │   ├── page.tsx          #   账单页：月结余 + 近七日支出 + 按月流水
+│   │   ├── assets/           #   资产总览 / 账户明细
+│   │   ├── search/           #   搜索账单 / 自定义筛选
+│   │   ├── stats/            #   统计 / 分类详情
+│   │   ├── transactions/     #   记一笔（含编辑）；原明细列表页已重定向到 /
+│   │   └── settings/         #   我的：账户 / 分类 / 标签 / 预算
 │   ├── admin/                # 管理后台
 │   │   ├── login/            #   管理员登录
 │   │   └── (dashboard)/      #   概览 / 用户 / 账目 / 审计日志 / 管理员

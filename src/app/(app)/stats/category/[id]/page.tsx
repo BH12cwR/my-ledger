@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { CategoryBadge } from "@/components/category-icon";
 import { EmptyBlock, ErrorBlock, LoadingBlock, ListSkeleton } from "@/components/layout/states";
+import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +64,9 @@ export default function CategoryDetailPage() {
   });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
+  // 点开的那笔账目：详情 / 删除 / 退款都在抽屉里完成
+  // （`detail` 已被本页的统计指标占用，这里换一个名字）
+  const [activeTransaction, setActiveTransaction] = useState<TransactionDto | null>(null);
 
   // 切换年份后原来选中的月份已不属于该年，回到全年
   useEffect(() => {
@@ -156,6 +160,15 @@ export default function CategoryDetailPage() {
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  /** 删除 / 退款后重新取数：已追加的分页内容已失效，指标与柱状图也一并刷新 */
+  function refreshAll() {
+    setExtra({ page: 0, items: [] });
+    setMoreError(null);
+    detail.reload();
+    trend.reload();
+    list.reload();
   }
 
   if (categories.loading) return <LoadingBlock label="正在加载分类…" />;
@@ -320,10 +333,7 @@ export default function CategoryDetailPage() {
           <EmptyBlock title="该区间内没有记录" description="换一个时间 tab 试试" />
         ) : (
           <>
-            <GroupedList
-              items={items}
-              onSelect={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
-            />
+            <GroupedList items={items} onSelect={setActiveTransaction} />
             {hasMore ? (
               <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
                 {loadingMore ? "加载中…" : "加载更多"}
@@ -335,6 +345,13 @@ export default function CategoryDetailPage() {
           </>
         )}
       </section>
+
+      <TransactionDetailSheet
+        transaction={activeTransaction}
+        onOpenChange={(open) => (open ? undefined : setActiveTransaction(null))}
+        onChanged={refreshAll}
+        onEdit={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
+      />
     </div>
   );
 }

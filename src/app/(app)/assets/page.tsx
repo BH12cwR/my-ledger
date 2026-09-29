@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { CategoryBadge } from "@/components/category-icon";
 import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
-import { accountTypeLabel } from "@/lib/account-types";
 import type { AccountBalanceItem } from "@/lib/api";
 import { money } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
@@ -22,7 +23,9 @@ const GROUP_ORDER = [
 /**
  * 资产页：账户余额总览。
  *
- * 余额由服务端聚合（初始余额 + 收支净额），前端只负责合计与按类型分组，空组不渲染。
+ * 余额由服务端聚合（初始余额 + 收支净额 + 转账双向），前端只负责合计与按类型分组，空组不渲染。
+ * 点账户进入 `/assets/[id]` 看该账户的收支与流水；账户的增删改仍留在「我的 → 账户」，
+ * 两处职责分开，避免同一套管理逻辑维护两遍。
  */
 export default function AssetsPage() {
   const query = useApiQuery<{ items: AccountBalanceItem[] }>(ACCOUNTS_PATH);
@@ -58,18 +61,23 @@ export default function AssetsPage() {
             <h2 className="px-1 text-xs text-muted-foreground">{group.label}</h2>
             <div className="flex flex-col divide-y divide-border/60">
               {group.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 px-1 py-2.5">
+                <Link
+                  key={item.id}
+                  href={`/assets/${item.id}`}
+                  className="flex items-center gap-3 rounded-xl px-1 py-2.5 transition-colors hover:bg-muted/60"
+                >
                   <CategoryBadge icon={item.icon} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{item.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {accountTypeLabel(item.type)} · {item.transactionCount} 笔
+                      {item.transactionCount} 笔
                     </p>
                   </div>
                   <span className="shrink-0 font-mono text-sm tabular-nums">
                     {money(item.balanceCents)}
                   </span>
-                </div>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
               ))}
             </div>
           </section>

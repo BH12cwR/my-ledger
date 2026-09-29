@@ -10,7 +10,10 @@ import {
   createTransaction,
   deleteTransaction,
   getTransaction,
+  getTransactionDateRange,
+  getTransactionsSummary,
   listTransactions,
+  refundTransaction,
   updateTransaction,
 } from "@/server/services/transactions";
 import type { ListTransactionsQuery } from "@/server/validation/schemas";
@@ -206,6 +209,33 @@ describe("listTransactions 过滤与分页", () => {
     );
     const list = await listTransactions(db, userId, q({ accountId: account.id }));
     expect(list.total).toBe(1);
+  });
+
+  it("按账号过滤同时命中转出与转入（转账对两端都算）", async () => {
+    const [from, to] = await listAccounts(db, userId);
+    await createTransaction(
+      db,
+      userId,
+      {
+        kind: "transfer",
+        amount: "30.00",
+        accountId: from.id,
+        toAccountId: to.id,
+        happenedOn: "2026-09-12",
+      },
+      NOW,
+    );
+
+    // 只匹配 account_id 会让流入 to 的转账凭空消失，与账户余额的双向下账对不上
+    const outgoing = await listTransactions(db, userId, q({ accountId: from.id }));
+    const incoming = await listTransactions(db, userId, q({ accountId: to.id }));
+    expect(outgoing.total).toBe(1);
+    expect(incoming.total).toBe(1);
+    expect(outgoing.items[0].to_account_name).toBe(to.name);
+
+    const summary = await getTransactionsSummary(db, userId, { accountId: to.id });
+    expect(summary.transferCents).toBe(3000);
+    expect(summary.total).toBe(1);
   });
 
   it("分页返回 total / totalPages 且各页不重叠", async () => {
@@ -455,5 +485,214 @@ describe("转账", () => {
     await expect(
       updateTransaction(db, user.id, created.id, { toAccountId: from.id }, NOW),
     ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("搜索：关键字匹配金额与排序", () => {
+  let userId: string;
+
+  beforeEach(async () => {
+    const user = await makeUser("openid-a");
+    userId = user.id;
+    await createTransaction(
+      db,
+      userId,
+      { kind: "expense", amount: "19.50", note: "煎饺油条豆浆", happenedOn: "2026-09-05" },
+      NOW,
+    );
+    await createTransaction(
+      db,
+      userId,
+      { kind: "expense", amount: "344.02", note: "聚餐", happenedOn: "2026-09-06" },
+      NOW,
+    );
+    await createTransaction(
+      db,
+      userId,
+      { kind: "expense", amount: "10.00", note: "迅雷", happenedOn: "2026-09-07" },
+      NOW,
+    );
+  });
+
+  it("关键字按「元」匹配金额，整数与小数都命中", async () => {
+    const byDecimal = await listTransactions(db, userId, q({ keyword: "19.5" }));
+    expect(byDecimal.total).toBe(1);
+    expect(byDecimal.items[0].amount_cents).toBe(1950);
+
+    const byInteger = await listTransactions(db, userId, q({ keyword: "344" }));
+    expect(byInteger.total).toBe(1);
+    expect(byInteger.items[0].amount_cents).toBe(34402);
+  });
+
+  it("关键字仍匹配备注，且不会因金额分支而误伤", async () => {
+    const list = await listTransactions(db, userId, q({ keyword: "迅雷" }));
+    expect(list.total).toBe(1);
+    expect(list.items[0].note).toBe("迅雷");
+  });
+
+  it("sort=asc 按时间正序，缺省时从新到旧", async () => {
+    const ascending = await listTransactions(db, userId, q({ sort: "asc" }));
+    expect(ascending.items.map((item) => item.happened_on)).toEqual([
+      "2026-09-05",
+      "2026-09-06",
+      "2026-09-07",
+    ]);
+
+    const descending = await listTransactions(db, userId, q({ sort: "desc" }));
+    expect(descending.items.map((item) => item.happened_on)).toEqual([
+      "2026-09-07",
+      "2026-09-06",
+      "2026-09-05",
+    ]);
+  });
+});
+
+describe("getTransactionsSummary", () => {
+  const RANGE = { from: "2026-09-01", to: "2026-09-30" };
+  let userId: string;
+  let expenseId: string;
+
+  beforeEach(async () => {
+    const user = await makeUser("openid-a");
+    userId = user.id;
+    const [from, to] = await listAccounts(db, user.id);
+    const category = await makeCategory(user.id, "伙食", "expense");
+
+    expenseId = (
+      await createTransaction(
+        db,
+        userId,
+        { kind: "expense", amount: "100.00", categoryId: category.id, happenedOn: "2026-09-05" },
+        NOW,
+      )
+    ).id;
+    await createTransaction(
+      db,
+      userId,
+      { kind: "income", amount: "300.00", happenedOn: "2026-09-06" },
+      NOW,
+    );
+    await createTransaction(
+      db,
+      userId,
+      {
+        kind: "transfer",
+        amount: "50.00",
+        accountId: from.id,
+        toAccountId: to.id,
+        happenedOn: "2026-09-07",
+      },
+      NOW,
+    );
+    await refundTransaction(db, userId, expenseId, NOW);
+  });
+
+  it("五项汇总口径正确，且 total 与列表总数一致", async () => {
+    const summary = await getTransactionsSummary(db, userId, RANGE);
+
+    expect(summary.expenseCents).toBe(10000);
+    // 支出 100 + 收入 300 + 退款生成的等额收入 100
+    expect(summary.incomeCents).toBe(40000);
+    expect(summary.netCents).toBe(30000);
+    expect(summary.transferCents).toBe(5000);
+    expect(summary.refundCents).toBe(10000);
+    expect(summary.total).toBe(4);
+
+    const list = await listTransactions(db, userId, { ...RANGE, page: 1, pageSize: 20 });
+    expect(list.total).toBe(summary.total);
+  });
+
+  it("转账单独成项、不并入收支；退款不受类型筛选影响", async () => {
+    const summary = await getTransactionsSummary(db, userId, { ...RANGE, kind: "transfer" });
+
+    expect(summary.total).toBe(1);
+    expect(summary.transferCents).toBe(5000);
+    expect(summary.expenseCents).toBe(0);
+    expect(summary.incomeCents).toBe(0);
+    // 退款恒为收入记录，带上 kind 过滤就永远统计不到，因此汇总里的退款口忽略类型
+    expect(summary.refundCents).toBe(10000);
+  });
+
+  it("时间区间外与已删除的账目都不计入", async () => {
+    await deleteTransaction(db, userId, expenseId, NOW + 1000);
+
+    const summary = await getTransactionsSummary(db, userId, RANGE);
+    // 支出被删掉，连带其退款记录一并软删除
+    expect(summary.expenseCents).toBe(0);
+    expect(summary.incomeCents).toBe(30000);
+    expect(summary.refundCents).toBe(0);
+
+    const outside = await getTransactionsSummary(db, userId, {
+      from: "2026-10-01",
+      to: "2026-10-31",
+    });
+    expect(outside.total).toBe(0);
+  });
+
+  it("关键字与类型条件下的汇总与列表同步收窄", async () => {
+    const summary = await getTransactionsSummary(db, userId, { ...RANGE, keyword: "300" });
+    expect(summary.total).toBe(1);
+    expect(summary.incomeCents).toBe(30000);
+    expect(summary.transferCents).toBe(0);
+  });
+});
+
+describe("getTransactionDateRange", () => {
+  it("返回最早 / 最晚业务日", async () => {
+    const user = await makeUser("openid-a");
+    expect(await getTransactionDateRange(db, user.id)).toEqual({ firstDay: null, lastDay: null });
+
+    await createTransaction(
+      db,
+      user.id,
+      { kind: "expense", amount: "1.00", happenedOn: "2025-03-04" },
+      NOW,
+    );
+    await createTransaction(
+      db,
+      user.id,
+      { kind: "expense", amount: "2.00", happenedOn: "2026-09-07" },
+      NOW,
+    );
+
+    expect(await getTransactionDateRange(db, user.id)).toEqual({
+      firstDay: "2025-03-04",
+      lastDay: "2026-09-07",
+    });
+  });
+
+  it("只统计当前用户且排除软删除的账目", async () => {
+    const userA = await makeUser("openid-a");
+    const userB = await makeUser("openid-b");
+    const mine = await createTransaction(
+      db,
+      userA.id,
+      { kind: "expense", amount: "1.00", happenedOn: "2025-03-04" },
+      NOW,
+    );
+    await createTransaction(
+      db,
+      userA.id,
+      { kind: "expense", amount: "2.00", happenedOn: "2026-09-07" },
+      NOW,
+    );
+    await createTransaction(
+      db,
+      userB.id,
+      { kind: "expense", amount: "3.00", happenedOn: "2020-01-01" },
+      NOW,
+    );
+
+    // 他人更早的账目不应把区间的起点拉走
+    expect(await getTransactionDateRange(db, userA.id)).toEqual({
+      firstDay: "2025-03-04",
+      lastDay: "2026-09-07",
+    });
+
+    await deleteTransaction(db, userA.id, mine.id, NOW + 1000);
+    expect(await getTransactionDateRange(db, userA.id)).toEqual({
+      firstDay: "2026-09-07",
+      lastDay: "2026-09-07",
+    });
   });
 });

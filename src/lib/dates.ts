@@ -164,3 +164,76 @@ export function relativeDayLabel(day: string, today = todayInBusinessTimezone())
   if (day === shiftDay(today, -2)) return "前天";
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// 日期范围预设：搜索页 / 自定义筛选页的「全部 / 本月 / 上月 / 今年 / 去年」等快捷项
+// ---------------------------------------------------------------------------
+
+/** 预设项；`data` 表示「用户全部数据的年份跨度」，`custom` 仅由 detect 返回 */
+export type RangePreset =
+  | "all"
+  | "thisMonth"
+  | "lastMonth"
+  | "thisYear"
+  | "lastYear"
+  | "data";
+
+/** 预设与「手填区间」共用同一套解析，detectRangePreset 会在都不匹配时回落到它 */
+export type DetectedRangePreset = RangePreset | "custom";
+
+export interface RangePresetContext {
+  today?: string;
+  monthStartDay?: number;
+  /** 用户最早 / 最晚一笔账的业务日，用于 `data` 预设 */
+  dataFrom?: string | null;
+  dataTo?: string | null;
+}
+
+/**
+ * 把预设解析为闭区间；`全部` 返回的 from/to 均为 null，表示不加时间条件。
+ *
+ * 「本月 / 上月」走账期口径（受「月份起始日」影响），与账单页、统计页保持一致；
+ * 「今年 / 去年」按自然年，「数据范围」用调用方给出的最早 / 最晚业务日。
+ */
+export function resolveRangePreset(
+  preset: RangePreset,
+  context: RangePresetContext = {},
+): { from: string | null; to: string | null } {
+  const today = context.today ?? todayInBusinessTimezone();
+  const startDay = normalizeMonthStartDay(context.monthStartDay ?? DEFAULT_MONTH_START_DAY);
+  const year = Number(today.slice(0, 4));
+
+  switch (preset) {
+    case "thisMonth":
+      return resolveMonthRange(periodMonthOf(today, startDay), startDay);
+    case "lastMonth":
+      return resolveMonthRange(shiftMonth(periodMonthOf(today, startDay), -1), startDay);
+    case "thisYear":
+      return { from: `${year}-01-01`, to: `${year}-12-31` };
+    case "lastYear":
+      return { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` };
+    case "data":
+      return { from: context.dataFrom ?? null, to: context.dataTo ?? null };
+    default:
+      return { from: null, to: null };
+  }
+}
+
+/** 从具体区间反查命中的预设，用于高亮筛选页当前选中的 chip */
+export function detectRangePreset(
+  from: string | null | undefined,
+  to: string | null | undefined,
+  context: RangePresetContext = {},
+): DetectedRangePreset {
+  const normalizedFrom = from ?? null;
+  const normalizedTo = to ?? null;
+  // 先判「全部」，否则 `data` 在无数据时也会解析成 (null, null) 而抢答
+  if (!normalizedFrom && !normalizedTo) return "all";
+
+  const candidates: RangePreset[] = ["thisMonth", "lastMonth", "thisYear", "lastYear", "data"];
+  for (const preset of candidates) {
+    const range = resolveRangePreset(preset, context);
+    if (range.from === normalizedFrom && range.to === normalizedTo) return preset;
+  }
+  return "custom";
+}

@@ -63,8 +63,20 @@ export const listTransactionsQuerySchema = z.object({
   accountId: z.string().trim().min(1).optional(),
   tagId: z.string().trim().min(1).optional(),
   keyword: z.string().trim().max(50, "搜索关键词过长").optional(),
+  /** 时间排序方向；缺省（undefined）即由近到远，服务层据此回落到 desc */
+  sort: z.enum(["desc", "asc"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+/**
+ * 搜索汇总：与列表共用同一套过滤条件，只是不需要分页与排序。
+ * 单独定义而不是 `listTransactionsQuerySchema.omit()`，方便 D1 查询串直接复用。
+ */
+export const transactionsSummaryQuerySchema = listTransactionsQuerySchema.omit({
+  sort: true,
+  page: true,
+  pageSize: true,
 });
 
 export const createCategorySchema = z.object({
@@ -241,6 +253,7 @@ export const userRegisterSchema = z.object({
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type ListTransactionsQuery = z.infer<typeof listTransactionsQuerySchema>;
+export type TransactionsSummaryQuery = z.infer<typeof transactionsSummaryQuerySchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;

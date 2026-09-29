@@ -53,3 +53,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 本地智能体工作区（记忆、日志、项目级技能等，属于本机状态，不入库）
+/.workbuddy

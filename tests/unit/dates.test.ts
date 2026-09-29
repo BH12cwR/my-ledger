@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   countDaysInclusive,
   countMonthsInclusive,
+  detectRangePreset,
   fromBusinessDay,
   isValidDay,
   previousRange,
   resolveBudgetPeriodRange,
   resolveDayRange,
+  resolveRangePreset,
   shiftDay,
   toBusinessDay,
   todayInBusinessTimezone,
@@ -158,5 +160,87 @@ describe("resolveBudgetPeriodRange", () => {
   it("默认使用业务时区的今天", () => {
     const today = todayInBusinessTimezone();
     expect(resolveBudgetPeriodRange("monthly").to).toBe(today);
+  });
+});
+
+describe("resolveRangePreset", () => {
+  const context = {
+    today: "2026-09-29",
+    monthStartDay: 1,
+    dataFrom: "2025-03-04",
+    dataTo: "2026-09-27",
+  };
+
+  it("全部不限定时间，两头都是 null", () => {
+    expect(resolveRangePreset("all", context)).toEqual({ from: null, to: null });
+  });
+
+  it("本月 / 上月按账期口径解析", () => {
+    expect(resolveRangePreset("thisMonth", context)).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+    expect(resolveRangePreset("lastMonth", context)).toEqual({
+      from: "2026-08-01",
+      to: "2026-08-31",
+    });
+  });
+
+  it("月份起始日改变「本月」的区间", () => {
+    expect(resolveRangePreset("thisMonth", { ...context, monthStartDay: 5 })).toEqual({
+      from: "2026-09-05",
+      to: "2026-10-04",
+    });
+  });
+
+  it("今年 / 去年取自然年整年", () => {
+    expect(resolveRangePreset("thisYear", context)).toEqual({
+      from: "2026-01-01",
+      to: "2026-12-31",
+    });
+    expect(resolveRangePreset("lastYear", context)).toEqual({
+      from: "2025-01-01",
+      to: "2025-12-31",
+    });
+  });
+
+  it("数据范围取最早 / 最晚业务日，缺数据时回落为 null", () => {
+    expect(resolveRangePreset("data", context)).toEqual({
+      from: "2025-03-04",
+      to: "2026-09-27",
+    });
+    expect(resolveRangePreset("data", { today: "2026-09-29" })).toEqual({ from: null, to: null });
+  });
+
+  it("跨年边界：1 月 1 日选「上月」会落到上一年 12 月", () => {
+    expect(resolveRangePreset("lastMonth", { today: "2027-01-10", monthStartDay: 1 })).toEqual({
+      from: "2026-12-01",
+      to: "2026-12-31",
+    });
+  });
+});
+
+describe("detectRangePreset", () => {
+  const context = {
+    today: "2026-09-29",
+    monthStartDay: 1,
+    dataFrom: "2025-03-04",
+    dataTo: "2026-09-27",
+  };
+
+  it("识别命中的预设", () => {
+    expect(detectRangePreset(null, null, context)).toBe("all");
+    expect(detectRangePreset("2026-09-01", "2026-09-30", context)).toBe("thisMonth");
+    expect(detectRangePreset("2025-03-04", "2026-09-27", context)).toBe("data");
+  });
+
+  it("手填区间回落到 custom", () => {
+    expect(detectRangePreset("2026-09-02", "2026-09-20", context)).toBe("custom");
+    // 只有一端也算手填
+    expect(detectRangePreset("2026-09-02", null, context)).toBe("custom");
+  });
+
+  it("无数据时不会把「全部」误判成数据范围", () => {
+    expect(detectRangePreset(null, null, { today: "2026-09-29" })).toBe("all");
   });
 });

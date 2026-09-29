@@ -609,7 +609,7 @@ export default function SettingsPage() {
           ) : (budgets.data?.items ?? []).length === 0 ? (
             <EmptyBlock
               title="还没有预算"
-              description="为每月或每年的支出设定额度，首页会实时展示使用进度"
+              description="为每月或每年的支出设定额度，在这里即可查看使用进度"
             />
           ) : (
             <div className="flex flex-col gap-2">
@@ -811,7 +811,7 @@ export default function SettingsPage() {
             <DialogDescription>
               {editingBudgetId
                 ? "仅可调整额度；如需更换周期或分类，请删除后重新设置"
-                : "额度为该周期内的支出上限，首页会实时展示使用进度"}
+                : "额度为该周期内的支出上限，在这里实时查看使用进度"}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">

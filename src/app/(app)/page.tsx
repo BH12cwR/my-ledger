@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChartPie, ChevronDown, Plus, UserRound } from "lucide-react";
+import { CalendarDays, ChartPie, ChevronDown, Plus, Search, UserRound } from "lucide-react";
 import { MonthSheet } from "@/components/date/date-sheet";
 import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
 import { WeeklyBars } from "@/components/stats/weekly-bars";
+import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
 import { SummaryHero } from "@/components/transaction/summary-hero";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,8 @@ export default function BillPage() {
   });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
+  // 点开的那笔账目：详情 / 删除 / 退款都在抽屉里完成
+  const [detail, setDetail] = useState<TransactionDto | null>(null);
 
   // 账期变化即清空已追加的页，否则会串到下一个月
   useEffect(() => {
@@ -112,6 +115,15 @@ export default function BillPage() {
     }
   }
 
+  /** 删除 / 退款后重新取数：已追加的分页内容已失效，一并清掉只保留首屏 */
+  function refreshAll() {
+    setExtra({ page: 0, items: [] });
+    setMoreError(null);
+    summary.reload();
+    trend.reload();
+    list.reload();
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <header className="flex items-center justify-between gap-2">
@@ -125,6 +137,11 @@ export default function BillPage() {
         </button>
 
         <div className="flex items-center gap-1">
+          <Button asChild variant="ghost" size="icon-sm">
+            <Link href="/search" aria-label="搜索账单">
+              <Search />
+            </Link>
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -190,10 +207,7 @@ export default function BillPage() {
           />
         ) : (
           <>
-            <GroupedList
-              items={items}
-              onSelect={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
-            />
+            <GroupedList items={items} onSelect={setDetail} />
             {hasMore ? (
               <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
                 {loadingMore ? "加载中…" : "加载更多"}
@@ -213,6 +227,13 @@ export default function BillPage() {
         onSelect={setMonthOverride}
         monthStartDay={monthStartDay}
         onMonthStartDayChange={setMonthStartDay}
+      />
+
+      <TransactionDetailSheet
+        transaction={detail}
+        onOpenChange={(open) => (open ? undefined : setDetail(null))}
+        onChanged={refreshAll}
+        onEdit={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
       />
     </div>
   );

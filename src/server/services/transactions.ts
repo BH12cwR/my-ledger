@@ -29,6 +29,77 @@ export interface TransactionView extends TransactionRecord {
   user_nickname?: string | null;
 }
 
+/** 账目过滤条件的公共子集：列表、计数、搜索汇总都基于它 */
+export interface TransactionFilterQuery {
+  from?: string;
+  to?: string;
+  kind?: "expense" | "income" | "transfer";
+  categoryId?: string;
+  accountId?: string;
+  tagId?: string;
+  keyword?: string;
+}
+
+/**
+ * 构造账目查询的 WHERE 条件。
+ *
+ * 列表、计数与「搜索汇总」共用这一段，保证汇总卡与下方明细永远是同一批数据
+ * （否则改一处筛选很容易让两处口径悄悄漂移）。
+ * 关键字同时匹配备注、分类名与金额：金额按「元」保留两位小数后模糊匹配，
+ * 因此搜「1950」能命中 1950.00，搜「19.5」也能命中 19.50。
+ */
+function buildTransactionFilters(
+  scopedUserId: string | null,
+  query: TransactionFilterQuery,
+): { conditions: string[]; params: unknown[] } {
+  const conditions: string[] = [`t.deleted_at IS NULL`];
+  const params: unknown[] = [];
+
+  if (scopedUserId) {
+    conditions.push(`t.user_id = ?`);
+    params.push(scopedUserId);
+  }
+  if (query.from || query.to) {
+    const range = resolveDayRange(query.from, query.to);
+    conditions.push(`t.happened_on BETWEEN ? AND ?`);
+    params.push(range.from, range.to);
+  }
+  if (query.kind) {
+    conditions.push(`t.kind = ?`);
+    params.push(query.kind);
+  }
+  if (query.categoryId) {
+    conditions.push(`t.category_id = ?`);
+    params.push(query.categoryId);
+  }
+  if (query.accountId) {
+    // 转账对两端都有影响（见 getAccountBalances 的双向下账），
+    // 因此账户明细必须同时命中「转出」与「转入」，否则余额与流水会对不上。
+    conditions.push(`(t.account_id = ? OR t.to_account_id = ?)`);
+    params.push(query.accountId, query.accountId);
+  }
+  if (query.tagId) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)`,
+    );
+    params.push(query.tagId);
+  }
+  if (query.keyword) {
+    const like = `%${query.keyword}%`;
+    conditions.push(
+      `(t.note LIKE ? OR c.name LIKE ? OR printf('%.2f', ABS(t.amount_cents) / 100.0) LIKE ?)`,
+    );
+    params.push(like, like, like);
+  }
+
+  return { conditions, params };
+}
+
+/** categories 只在关键字搜索（c.name LIKE ?）时才需要参与过滤 */
+function needsCategoryJoin(query: { keyword?: string }): string {
+  return query.keyword ? "\n         LEFT JOIN categories c ON c.id = t.category_id" : "";
+}
+
 const NOON_MS = 12 * 60 * 60 * 1000;
 
 /** 由「业务日」推导出 happened_at：今天就取当前时刻，历史日期取当日中午，避免时区边界抖动 */
@@ -145,50 +216,16 @@ export async function listTransactions(
   extra: { userId?: string; includeUser?: boolean } = {},
 ): Promise<Paginated<TransactionView>> {
   const scopedUserId = extra.userId ?? userId;
-  const conditions: string[] = [`t.deleted_at IS NULL`];
-  const params: unknown[] = [];
-
-  if (scopedUserId) {
-    conditions.push(`t.user_id = ?`);
-    params.push(scopedUserId);
-  }
-  if (query.from || query.to) {
-    const range = resolveDayRange(query.from, query.to);
-    conditions.push(`t.happened_on BETWEEN ? AND ?`);
-    params.push(range.from, range.to);
-  }
-  if (query.kind) {
-    conditions.push(`t.kind = ?`);
-    params.push(query.kind);
-  }
-  if (query.categoryId) {
-    conditions.push(`t.category_id = ?`);
-    params.push(query.categoryId);
-  }
-  if (query.accountId) {
-    conditions.push(`t.account_id = ?`);
-    params.push(query.accountId);
-  }
-  if (query.tagId) {
-    conditions.push(
-      `EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)`,
-    );
-    params.push(query.tagId);
-  }
-  if (query.keyword) {
-    conditions.push(`(t.note LIKE ? OR c.name LIKE ?)`);
-    const like = `%${query.keyword}%`;
-    params.push(like, like);
-  }
-
+  const { conditions, params } = buildTransactionFilters(scopedUserId, query);
   const where = conditions.join(" AND ");
+  // 排序方向来自 zod 枚举，不会把外部字符串直接拼进 SQL
+  const direction = query.sort === "asc" ? "ASC" : "DESC";
   const offset = (query.page - 1) * query.pageSize;
 
   const totalRow = await db
     .prepare(
-      // categories 只在按关键字搜索（c.name LIKE ?）时才参与过滤，其余场景无需 JOIN
       `SELECT COUNT(*) AS count
-         FROM transactions t${query.keyword ? "\n         LEFT JOIN categories c ON c.id = t.category_id" : ""}
+         FROM transactions t${needsCategoryJoin(query)}
         WHERE ${where}`,
     )
     .bind(...params)
@@ -197,7 +234,7 @@ export async function listTransactions(
   const rows = await allRows<Omit<TransactionView, "tags">>(
     db
       .prepare(
-        `${selectView(extra.includeUser)} WHERE ${where} ORDER BY t.happened_at DESC, t.created_at DESC LIMIT ? OFFSET ?`,
+        `${selectView(extra.includeUser)} WHERE ${where} ORDER BY t.happened_at ${direction}, t.created_at ${direction} LIMIT ? OFFSET ?`,
       )
       .bind(...params, query.pageSize, offset),
   );
@@ -206,6 +243,99 @@ export async function listTransactions(
   const items = rows.map((row) => ({ ...row, tags: tagMap.get(row.id) ?? [] }));
 
   return paginate(items, totalRow?.count ?? 0, query.page, query.pageSize);
+}
+
+/**
+ * 搜索汇总卡的数据（稿 6）。
+ *
+ * 与列表同源：total 一定等于同条件下列表的 total，避免出现「汇总说 5 笔、列表只列出 3 笔」。
+ * 转账与退款单独成项，都不并入收支：转账只是账户间搬运资金，
+ * 退款则是「贴了 refund_of_id 的收入记录」。
+ */
+export interface TransactionsSummary {
+  /** 生效的时间区间，未限定时间为 null */
+  from: string | null;
+  to: string | null;
+  total: number;
+  expenseCents: number;
+  incomeCents: number;
+  netCents: number;
+  transferCents: number;
+  refundCents: number;
+}
+
+export async function getTransactionsSummary(
+  db: Db,
+  userId: string,
+  query: TransactionFilterQuery,
+): Promise<TransactionsSummary> {
+  const { conditions, params } = buildTransactionFilters(userId, query);
+  const where = conditions.join(" AND ");
+
+  // 退款恒为收入记录，带上 kind 过滤就永远统计不到，因此单独去掉 kind 再算一次
+  const refundFilters = buildTransactionFilters(userId, { ...query, kind: undefined });
+  const refundWhere = `${refundFilters.conditions.join(" AND ")} AND t.refund_of_id IS NOT NULL`;
+
+  const [totals, refunds] = await Promise.all([
+    db
+      .prepare(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN t.kind = 'expense'  THEN t.amount_cents ELSE 0 END), 0) AS expense_cents,
+                COALESCE(SUM(CASE WHEN t.kind = 'income'   THEN t.amount_cents ELSE 0 END), 0) AS income_cents,
+                COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN t.amount_cents ELSE 0 END), 0) AS transfer_cents
+           FROM transactions t${needsCategoryJoin(query)}
+          WHERE ${where}`,
+      )
+      .bind(...params)
+      .first<{
+        total: number;
+        expense_cents: number;
+        income_cents: number;
+        transfer_cents: number;
+      }>(),
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(t.amount_cents), 0) AS refund_cents
+           FROM transactions t${needsCategoryJoin(query)}
+          WHERE ${refundWhere}`,
+      )
+      .bind(...refundFilters.params)
+      .first<{ refund_cents: number }>(),
+  ]);
+
+  const expenseCents = totals?.expense_cents ?? 0;
+  const incomeCents = totals?.income_cents ?? 0;
+
+  return {
+    from: query.from ?? null,
+    to: query.to ?? null,
+    total: totals?.total ?? 0,
+    expenseCents,
+    incomeCents,
+    netCents: incomeCents - expenseCents,
+    transferCents: totals?.transfer_cents ?? 0,
+    refundCents: refunds?.refund_cents ?? 0,
+  };
+}
+
+/**
+ * 该用户全部账目的最早 / 最晚业务日。
+ * 自定义筛选页用它渲染「2025年~2026年」这枚动态 chip；没有账目时两天均为 null。
+ */
+export async function getTransactionDateRange(
+  db: Db,
+  userId: string,
+): Promise<{ firstDay: string | null; lastDay: string | null }> {
+  const row = await db
+    .prepare(
+      `SELECT MIN(t.happened_on) AS first_day, MAX(t.happened_on) AS last_day
+         FROM transactions t
+        WHERE t.user_id = ? AND t.deleted_at IS NULL`,
+    )
+    .bind(userId)
+    .first<{ first_day: string | null; last_day: string | null }>();
+
+  return { firstDay: row?.first_day ?? null, lastDay: row?.last_day ?? null };
 }
 
 export async function createTransaction(
