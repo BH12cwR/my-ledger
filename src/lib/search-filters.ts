@@ -7,6 +7,12 @@
 
 import { buildQuery, type TransactionSort } from "./api";
 
+/**
+ * 搜索页自身的排序只开放时间正 / 倒序；按金额排序归统计页的「账单列表」抽屉使用，
+ * 不写进本页的查询串，避免同一份 URL 状态混进两套排序语义。
+ */
+export type SearchSort = Extract<TransactionSort, "desc" | "asc">;
+
 /** 空串表示「不限定类型」 */
 export type SearchKindFilter = "" | "expense" | "income" | "transfer";
 
@@ -23,7 +29,7 @@ export interface SearchFilters {
   to: string;
   categoryId: string;
   keyword: string;
-  sort: TransactionSort;
+  sort: SearchSort;
 }
 
 export const EMPTY_SEARCH_FILTERS: SearchFilters = {

@@ -4,6 +4,7 @@ import { createTestDb } from "../helpers/d1";
 import { upsertWechatUser } from "@/server/services/users";
 import { createAccount } from "@/server/services/accounts";
 import { createCategory } from "@/server/services/categories";
+import { createTag } from "@/server/services/tags";
 import { createTransaction, deleteTransaction, listTransactions, refundTransaction } from "@/server/services/transactions";
 import {
   getAccountBalances,
@@ -72,6 +73,40 @@ describe("getSummary", () => {
     expect(summary.expenseCount).toBe(3);
     // 平均支出只按支出笔数摊分（4000 / 3），不被收入笔数拉低
     expect(summary.averageExpenseCents).toBe(1333);
+    // 日均支出按区间覆盖的自然日数摊分（4000 / 15 天）
+    expect(summary.dailyAverageCents).toBe(267);
+    // 区间内没有转账
+    expect(summary.transferCents).toBe(0);
+  });
+
+  it("转账金额单独计入 transferCents，不进收支", async () => {
+    const wallet = await createAccount(db, userId, {
+      name: "钱包",
+      type: "cash",
+      icon: "wallet",
+      initialBalance: "0.00",
+      sortOrder: 1,
+    });
+    await createTransaction(
+      db,
+      userId,
+      {
+        kind: "transfer",
+        amount: "50.00",
+        accountId: bankAccountId,
+        toAccountId: wallet.id,
+        happenedOn: "2026-09-05",
+      },
+      NOW,
+    );
+
+    const summary = await getSummary(db, userId, { from: "2026-09-01", to: "2026-09-15" });
+    expect(summary.transferCount).toBe(1);
+    expect(summary.transferCents).toBe(5000);
+    // 转账只是账户之间搬运资金，收支与笔数都不受影响
+    expect(summary.incomeCents).toBe(10300);
+    expect(summary.expenseCents).toBe(4000);
+    expect(summary.transactionCount).toBe(5);
   });
 
   it("空区间返回全 0", async () => {
@@ -82,6 +117,8 @@ describe("getSummary", () => {
     expect(summary.transactionCount).toBe(0);
     expect(summary.expenseCount).toBe(0);
     expect(summary.averageExpenseCents).toBe(0);
+    // 分母为 0 时日均支出必须回落到 0，不能出现 NaN / Infinity
+    expect(summary.dailyAverageCents).toBe(0);
   });
 
   it("软删除的账目不计入统计", async () => {
@@ -300,6 +337,42 @@ describe("getCategoryDetail", () => {
     });
     expect(detail.monthCount).toBe(2);
     expect(detail.averagePerMonthCents).toBe(1250); // 2500 / 2
+  });
+
+  it("按标签收窄时，指标与占比分母一起跟着变", async () => {
+    const tag = await createTag(db, userId, { name: "出差", color: "#3b82f6" });
+    await createTransaction(
+      db,
+      userId,
+      {
+        kind: "expense",
+        amount: "30.00",
+        categoryId: foodCategoryId,
+        accountId: bankAccountId,
+        happenedOn: "2026-09-20",
+        tagIds: [tag.id],
+      },
+      NOW,
+    );
+
+    const all = await getCategoryDetail(db, userId, {
+      categoryId: foodCategoryId,
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+    expect(all.totalCents).toBe(5500); // 20.00 + 5.00 + 30.00
+    expect(all.transactionCount).toBe(3);
+
+    const tagged = await getCategoryDetail(db, userId, {
+      categoryId: foodCategoryId,
+      from: "2026-09-01",
+      to: "2026-09-30",
+      tagId: tag.id,
+    });
+    expect(tagged.totalCents).toBe(3000);
+    expect(tagged.transactionCount).toBe(1);
+    // 分母也收窄到「同区间、同类型、同标签」：只有这一笔，占比 100%
+    expect(tagged.sharePercentage).toBe(100);
   });
 
   it("退款合计只统计来源支出属于该分类的退款", async () => {

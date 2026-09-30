@@ -28,6 +28,8 @@ const eslintConfig = [
       // Serwist 在构建时生成的产物，不参与源码检查
       "public/sw.js",
       "public/swe-worker-*.js",
+      // 本机状态目录（已 gitignore）：走查脚本与记忆日志不属于源码
+      ".workbuddy/**",
     ],
   },
 ];

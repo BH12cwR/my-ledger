@@ -113,7 +113,7 @@ export default function SearchFilterPage() {
   if (!ready) return <ListSkeleton rows={3} />;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-24">
       <header className="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -134,15 +134,17 @@ export default function SearchFilterPage() {
           <CardTitle>日期范围</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {presets.map((item) => (
               <button
                 key={item.preset}
                 type="button"
                 onClick={() => pickPreset(item.preset)}
                 className={cn(
-                  // 字号与内边距压到最小，保证「2025年~2026年」这类长标签在 3 列网格里也能整行显示
-                  "overflow-hidden rounded-xl border px-1.5 py-2 text-[11px] leading-tight whitespace-nowrap transition-colors",
+                  // 4 列等宽（跟设计稿）：首行 全部/本月/上月/今年，次行 去年 + 跨两列的年份跨度。
+                  // 跨列是给「2025年~2026年」这类长标签留位置，否则一行放不下。
+                  "overflow-hidden rounded-xl border px-1 py-2 text-xs leading-tight whitespace-nowrap transition-colors",
+                  item.preset === "data" && "col-span-2",
                   activePreset === item.preset
                     ? "border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400"
                     : "border-border/60 text-muted-foreground hover:bg-muted/60",
@@ -201,7 +203,15 @@ export default function SearchFilterPage() {
         </CardContent>
       </Card>
 
-      <Button onClick={confirm}>确定</Button>
+      {/* 「确定」吸底（跟设计稿）。二级页不挂底部导航，所以不会与导航重叠；
+          外面再用 pb-24 给内容留出等高的余量，避免最后一张卡被按钮盖住 */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur-sm">
+        <div className="mx-auto w-full max-w-2xl px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Button className="w-full" onClick={confirm}>
+            确定
+          </Button>
+        </div>
+      </div>
 
       <BottomSheet open={categoryOpen} onOpenChange={setCategoryOpen}>
         <BottomSheetContent title="选择分类">

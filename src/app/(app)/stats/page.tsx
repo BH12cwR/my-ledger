@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Area,
-  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -13,13 +13,22 @@ import {
   YAxis,
   type PieLabelRenderProps,
 } from "recharts";
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChartColumn,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  SlidersHorizontal,
+} from "lucide-react";
+import { BillListSheet } from "@/components/stats/bill-list-sheet";
 import { CategoryRank } from "@/components/stats/category-rank";
 import { MonthSheet } from "@/components/date/date-sheet";
 import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
 import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -48,7 +57,7 @@ import {
   shiftMonth,
   todayInBusinessTimezone,
 } from "@/lib/dates";
-import { axisDay, money, monthLabel } from "@/lib/format";
+import { money, monthLabel } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
 import { useMonthStartDay } from "@/lib/month-start-day";
 import { cn } from "@/lib/utils";
@@ -114,6 +123,10 @@ export default function StatsPage() {
   const [tagId, setTagId] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  /** 「收支总览」五项指标是否收起（跟设计稿的折叠箭头） */
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+  /** 点开环形图扇区后弹出「账单列表」抽屉的分类 id */
+  const [billList, setBillList] = useState<string | null>(null);
   // 悬停与锁定分开管理：悬停移开即恢复，锁定需显式点击（触摸端不触发 mouseleave）
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
@@ -177,6 +190,12 @@ export default function StatsPage() {
   const points = trend.data?.points ?? [];
   const hasTrendData = points.some((point) => point.incomeCents > 0 || point.expenseCents > 0);
   const kindLabel = kind === "income" ? "收入" : "支出";
+  // 「日收支统计」的柱子跟随整页口径；「全部」下与环形图保持一致，固定看支出
+  const trendKey = kind === "income" ? "incomeCents" : "expenseCents";
+  const trendColor = kind === "income" ? "#10b981" : "#f43f5e";
+  /** X 轴：按日时只给「日号」（跟设计稿的 1 / 5 / 9…），按月时给「YYYY年M月」 */
+  const trendTick = (value: string) =>
+    trendGranularity === "month" ? monthLabel(value) : String(Number(value.slice(8, 10)));
 
   // 已选中的分类即使与当前口径不符也要保留在下拉框中，避免选项失配
   const categoryOptions = (categories.data?.items ?? []).filter(
@@ -266,6 +285,94 @@ export default function StatsPage() {
         </Button>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>收支总览</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center gap-4">
+          {summaryCollapsed ? null : (
+            <div className="grid w-full grid-cols-2 gap-4">
+              <OverviewCell label="支出" value={money(summary.data?.expenseCents ?? 0)} />
+              <OverviewCell label="收入" value={money(summary.data?.incomeCents ?? 0)} />
+              <OverviewCell label="结余" value={money(summary.data?.netCents ?? 0)} />
+              <OverviewCell label="日均支出" value={money(summary.data?.dailyAverageCents ?? 0)} />
+              <OverviewCell
+                label="转账"
+                value={money(summary.data?.transferCents ?? 0)}
+                className="col-span-2"
+              />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setSummaryCollapsed((collapsed) => !collapsed)}
+            aria-expanded={!summaryCollapsed}
+            aria-label={summaryCollapsed ? "展开收支总览" : "收起收支总览"}
+            className="inline-flex w-24 items-center justify-center rounded-lg bg-muted/60 py-1 text-muted-foreground transition-colors hover:bg-muted"
+          >
+            <ChevronUp
+              className={cn("size-4 transition-transform", summaryCollapsed && "rotate-180")}
+              aria-hidden
+            />
+          </button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>日收支统计</CardTitle>
+          <CardAction>
+            {/* 设计稿的卡头图标没有定义动作，这里如实做成图表类型标识，不假装成按钮 */}
+            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+              <ChartColumn className="size-4" aria-hidden />
+            </span>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {trend.loading ? (
+            <LoadingBlock label="正在生成走势…" />
+          ) : trend.error ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">{trend.error}</p>
+          ) : !hasTrendData ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              该区间内还没有收支记录
+            </p>
+          ) : (
+            <ChartContainer config={TREND_CONFIG} className="aspect-auto h-52 w-full">
+              <BarChart data={points} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={16}
+                  tickFormatter={trendTick}
+                />
+                <YAxis
+                  width={44}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value: number) => axisMoney(value)}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      indicator="line"
+                      labelFormatter={(value) =>
+                        trendGranularity === "month" ? monthLabel(String(value)) : String(value)
+                      }
+                      formatter={(value) => money(Number(value))}
+                    />
+                  }
+                />
+                <Bar dataKey={trendKey} fill={trendColor} radius={2} maxBarSize={10} />
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex gap-1 rounded-xl bg-muted/60 p-1">
         {KINDS.map((item) => (
           <button
@@ -285,91 +392,9 @@ export default function StatsPage() {
       </div>
 
       <Card>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm">
-          <Metric label="收入" value={money(summary.data?.incomeCents ?? 0)} tone="income" />
-          <Metric label="支出" value={money(summary.data?.expenseCents ?? 0)} tone="expense" />
-          <Metric label="结余" value={money(summary.data?.netCents ?? 0)} />
-          <Metric label="笔数" value={`${summary.data?.transactionCount ?? 0}`} />
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader>
-          <CardTitle>{trendGranularity === "month" ? "月度收支走势" : "每日收支走势"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {trend.loading ? (
-            <LoadingBlock label="正在生成走势…" />
-          ) : trend.error ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">{trend.error}</p>
-          ) : !hasTrendData ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">
-              该区间内还没有收支记录
-            </p>
-          ) : (
-            <ChartContainer config={TREND_CONFIG} className="aspect-auto h-56 w-full">
-              <AreaChart data={points} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="fillIncome" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-incomeCents)" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="var(--color-incomeCents)" stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="fillExpense" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-expenseCents)" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="var(--color-expenseCents)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  minTickGap={16}
-                  tickFormatter={(value: string) =>
-                    trendGranularity === "month" ? monthLabel(value) : axisDay(value)
-                  }
-                />
-                <YAxis
-                  width={44}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value: number) => axisMoney(value)}
-                />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      indicator="line"
-                      labelFormatter={(value) =>
-                        trendGranularity === "month" ? monthLabel(String(value)) : String(value)
-                      }
-                      formatter={(value) => money(Number(value))}
-                    />
-                  }
-                />
-                <Area
-                  dataKey="incomeCents"
-                  type="monotone"
-                  fill="url(#fillIncome)"
-                  stroke="var(--color-incomeCents)"
-                  strokeWidth={2}
-                />
-                <Area
-                  dataKey="expenseCents"
-                  type="monotone"
-                  fill="url(#fillExpense)"
-                  stroke="var(--color-expenseCents)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ChartContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{kind === "all" ? "支出结构" : `${kindLabel}结构`}</CardTitle>
+          {/* 稿 10 的卡名就是「分类统计」，不随口径改名 —— 口径已由下方的分段表达 */}
+          <CardTitle>分类统计</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {breakdown.loading || ringQuery.loading ? (
@@ -405,9 +430,12 @@ export default function StatsPage() {
                       label={renderRingLabel}
                       onMouseEnter={(_data, index) => setHoverIndex(index)}
                       onMouseLeave={() => setHoverIndex(null)}
-                      onClick={(_data, index) =>
-                        setPinnedIndex((current) => (current === index ? null : index))
-                      }
+                      onClick={(_data, index) => {
+                        const item = ringItems[index];
+                        // 未分类的扇区没有 id，筛不出对应流水，只做高亮
+                        if (item?.id) setBillList(item.id);
+                        setPinnedIndex((current) => (current === index ? null : index));
+                      }}
                     >
                       {ringItems.map((item, index) => (
                         <Cell
@@ -434,9 +462,7 @@ export default function StatsPage() {
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-muted-foreground">
-                        {kind === "all" ? "支出合计" : `${kindLabel}合计`}
-                      </span>
+                      <span className="text-xs text-muted-foreground">总计</span>
                       <span className="font-mono font-medium tabular-nums">
                         {money(ringData?.totalCents ?? 0)}
                       </span>
@@ -587,6 +613,24 @@ export default function StatsPage() {
           </div>
         </BottomSheetContent>
       </BottomSheet>
+
+      <BillListSheet
+        open={billList !== null}
+        onOpenChange={(next) => {
+          if (!next) setBillList(null);
+        }}
+        categoryId={billList}
+        // 「全部」口径下环形图固定看支出，账单列表跟着同一口径才不会对不上
+        kind={kind === "income" ? "income" : "expense"}
+        from={range.from}
+        to={range.to}
+        onChanged={() => {
+          summary.reload();
+          breakdown.reload();
+          ringQuery.reload();
+        }}
+        onEdit={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
+      />
     </div>
   );
 }
@@ -613,27 +657,20 @@ function renderRingLabel(props: PieLabelRenderProps) {
   );
 }
 
-function Metric({
+/** 「收支总览」的一格：标签在上、数值在下，整格居中（跟设计稿） */
+function OverviewCell({
   label,
   value,
-  tone,
+  className,
 }: {
   label: string;
   value: string;
-  tone?: "income" | "expense";
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg bg-muted/60 px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "font-mono tabular-nums",
-          tone === "income" && "text-emerald-600 dark:text-emerald-400",
-          tone === "expense" && "text-rose-600 dark:text-rose-400",
-        )}
-      >
-        {value}
-      </p>
+    <div className={cn("flex flex-col items-center gap-1 text-center", className)}>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="font-mono text-lg tabular-nums">{value}</span>
     </div>
   );
 }

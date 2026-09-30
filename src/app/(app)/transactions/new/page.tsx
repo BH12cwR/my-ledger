@@ -349,12 +349,7 @@ export default function TransactionEditorPage() {
           onChange={(event) => setNote(event.target.value)}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
-        <span
-          className={cn(
-            "shrink-0 font-mono text-2xl tabular-nums",
-            expression === "" ? "text-muted-foreground/40" : amountTone,
-          )}
-        >
+        <span className={cn("shrink-0 font-mono text-2xl tabular-nums", amountTone)}>
           {expression === "" ? "0.00" : expression}
         </span>
       </div>

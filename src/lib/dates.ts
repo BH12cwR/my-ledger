@@ -91,11 +91,19 @@ export function resolveBudgetPeriodRange(
 // 账期：以「月份起始日」重新定义一个月
 // ---------------------------------------------------------------------------
 
-/** 月份起始日默认值：1 号，此时账期等价自然月 */
+/** 账期起始日默认值：1 号，此时账期等价自然月 */
 export const DEFAULT_MONTH_START_DAY = 1;
 
 /** 起始日上限 28，保证每个月都存在该日（2 月也不会缺日） */
 export const MAX_MONTH_START_DAY = 28;
+
+/**
+ * 账单页日期抽屉的「显示方式」：
+ *  * `month` —— 按账期（受「月份起始日」影响，等价自然月时就是自然月）；
+ *  * `year`  —— 按自然年整年；
+ *  * `all`   —— 不限时间，用账目数据本身的跨度。
+ */
+export type BillRangeMode = "month" | "year" | "all";
 
 /** 把任意输入规整为合法的月份起始日（1–28），非法值回落到默认值 */
 export function normalizeMonthStartDay(value: unknown): number {

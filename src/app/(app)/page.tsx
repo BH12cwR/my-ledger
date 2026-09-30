@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChartPie, ChevronDown, Plus, Search, UserRound } from "lucide-react";
+import { CalendarDays, ChartColumn, ChevronDown, Plus, Search, UserRound } from "lucide-react";
 import { MonthSheet } from "@/components/date/date-sheet";
 import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
 import { WeeklyBars } from "@/components/stats/weekly-bars";
@@ -11,7 +11,7 @@ import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
 import { SummaryHero } from "@/components/transaction/summary-hero";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   api,
   buildQuery,
@@ -26,10 +26,12 @@ import {
   resolveMonthRange,
   shiftDay,
   todayInBusinessTimezone,
+  type BillRangeMode,
 } from "@/lib/dates";
 import { money, monthLabel } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
 import { useMonthStartDay } from "@/lib/month-start-day";
+import type { TransactionDateRange } from "@/lib/api";
 
 const PAGE_SIZE = 50;
 
@@ -47,9 +49,36 @@ export default function BillPage() {
   // 用户手动选过月份后固定住，避免起始日异步加载完成时把默认月份改回去
   const [monthOverride, setMonthOverride] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** 日期抽屉的「显示方式」：按月（账期）/ 按年（自然年）/ 全部（账目自身跨度） */
+  const [mode, setMode] = useState<BillRangeMode>("month");
 
   const month = monthOverride ?? periodMonthOf(today, monthStartDay);
-  const range = useMemo(() => resolveMonthRange(month, monthStartDay), [month, monthStartDay]);
+  const monthRange = useMemo(() => resolveMonthRange(month, monthStartDay), [month, monthStartDay]);
+  // 「全部」要用账目自身的跨度，只为这个模式发一次请求
+  const dataRange = useApiQuery<TransactionDateRange>(
+    mode === "all" ? "/api/transactions/range" : null,
+  );
+  const range = useMemo(() => {
+    if (mode === "year") {
+      const year = month.slice(0, 4);
+      return { from: `${year}-01-01`, to: `${year}-12-31` };
+    }
+    if (mode === "all") {
+      const { firstDay, lastDay } = dataRange.data ?? { firstDay: null, lastDay: null };
+      // 一笔账都没有时退回当前账期：接口在无区间时默认「最近 30 天」，那不是「全部」
+      return firstDay && lastDay ? { from: firstDay, to: lastDay } : monthRange;
+    }
+    return monthRange;
+  }, [mode, month, monthRange, dataRange.data]);
+
+  const heroLabel =
+    mode === "year"
+      ? `${month.slice(0, 4)}年结余`
+      : mode === "all"
+        ? "累计结余"
+        : `${monthLabel(month)}结余`;
+  const headerLabel =
+    mode === "year" ? `${month.slice(0, 4)}年` : mode === "all" ? "全部" : monthLabel(month);
 
   const summaryPath = `/api/stats/summary${buildQuery({ from: range.from, to: range.to })}`;
   const trendPath = `/api/stats/trend${buildQuery({
@@ -132,7 +161,7 @@ export default function BillPage() {
           onClick={() => setSheetOpen(true)}
           className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-lg font-medium transition-colors hover:bg-muted/60"
         >
-          {monthLabel(month)}
+          {headerLabel}
           <ChevronDown className="size-4 text-muted-foreground" />
         </button>
 
@@ -152,7 +181,7 @@ export default function BillPage() {
           </Button>
           <Button asChild variant="ghost" size="icon-sm">
             <Link href="/stats" aria-label="统计">
-              <ChartPie />
+              <ChartColumn />
             </Link>
           </Button>
           <Button asChild variant="ghost" size="icon-sm">
@@ -170,17 +199,20 @@ export default function BillPage() {
           onRetry={summary.reload}
         />
       ) : (
-        <SummaryHero month={month} summary={summary.data} />
+        <SummaryHero
+          label={heroLabel}
+          summary={summary.data}
+          incomeLabel={mode === "month" ? "月收入" : "收入"}
+          expenseLabel={mode === "month" ? "月支出" : "支出"}
+        />
       )}
 
       <Card>
         <CardHeader>
           <CardTitle>最近七日支出</CardTitle>
-          <CardAction>
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
-              共计 {money(weekTotal, "")}
-            </span>
-          </CardAction>
+          <CardDescription className="text-xs">
+            共计 <span className="font-mono tabular-nums">{money(weekTotal, "")}</span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {trend.loading ? <ListSkeleton rows={2} /> : <WeeklyBars points={weekPoints} />}
@@ -194,7 +226,7 @@ export default function BillPage() {
           <ErrorBlock title="流水加载失败" description={list.error} onRetry={list.reload} />
         ) : items.length === 0 ? (
           <EmptyBlock
-            title="本月还没有记录"
+            title="这个区间还没有记录"
             description="从「记一笔」开始，随手记下今天的收支"
             action={
               <Button asChild size="sm">
@@ -227,6 +259,8 @@ export default function BillPage() {
         onSelect={setMonthOverride}
         monthStartDay={monthStartDay}
         onMonthStartDayChange={setMonthStartDay}
+        mode={mode}
+        onModeChange={setMode}
       />
 
       <TransactionDetailSheet

@@ -218,8 +218,13 @@ export async function listTransactions(
   const scopedUserId = extra.userId ?? userId;
   const { conditions, params } = buildTransactionFilters(scopedUserId, query);
   const where = conditions.join(" AND ");
-  // 排序方向来自 zod 枚举，不会把外部字符串直接拼进 SQL
-  const direction = query.sort === "asc" ? "ASC" : "DESC";
+  // 排序键与方向都来自 zod 枚举的白名单，不会把外部字符串直接拼进 SQL
+  const byAmount = query.sort === "amount_asc" || query.sort === "amount_desc";
+  const direction = query.sort === "asc" || query.sort === "amount_asc" ? "ASC" : "DESC";
+  // 按金额排时必须再挂一个稳定键：金额相同的多行若无兜底，翻页会出现重复或漏出
+  const orderBy = byAmount
+    ? `ORDER BY t.amount_cents ${direction}, t.happened_at DESC, t.created_at DESC`
+    : `ORDER BY t.happened_at ${direction}, t.created_at ${direction}`;
   const offset = (query.page - 1) * query.pageSize;
 
   const totalRow = await db
@@ -234,7 +239,7 @@ export async function listTransactions(
   const rows = await allRows<Omit<TransactionView, "tags">>(
     db
       .prepare(
-        `${selectView(extra.includeUser)} WHERE ${where} ORDER BY t.happened_at ${direction}, t.created_at ${direction} LIMIT ? OFFSET ?`,
+        `${selectView(extra.includeUser)} WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
       )
       .bind(...params, query.pageSize, offset),
   );

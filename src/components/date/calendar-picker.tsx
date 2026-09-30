@@ -24,21 +24,22 @@ const QUICK_DAYS = [
 
 /**
  * 日期抽屉「变体 B」：记账页选具体某一天。
- * 月份导航 + 日历网格 + 今天/昨天/前天快捷，底部取消 / 确定。
+ * 月份导航 + 日历网格 + 今天/昨天/前天快捷。
+ *
+ * 「取消 / 确定」不在这里 —— 它们由 `CalendarSheet` 放在抽屉标题行右侧（跟设计稿），
+ * 本组件只负责「显示哪一天」与「选了哪一天」。抽屉每次打开都会重新挂载，
+ * 因此这里的月份游标天然从传入的 value 重新起算。
  */
 export function CalendarPicker({
   value,
-  onConfirm,
-  onCancel,
+  onSelect,
 }: {
-  /** 当前选中日期 YYYY-MM-DD */
+  /** 当前选中的日期，受控 */
   value: string;
-  onConfirm: (day: string) => void;
-  onCancel: () => void;
+  onSelect: (day: string) => void;
 }) {
   const today = todayInBusinessTimezone();
   const [cursor, setCursor] = useState(() => monthOf(value));
-  const [selected, setSelected] = useState(value);
 
   const firstWeekday = weekdayOf(`${cursor}-01`);
   const total = daysInMonth(cursor);
@@ -48,7 +49,7 @@ export function CalendarPicker({
   ];
 
   function jumpTo(day: string) {
-    setSelected(day);
+    onSelect(day);
     setCursor(monthOf(day));
   }
 
@@ -87,10 +88,10 @@ export function CalendarPicker({
             <button
               key={day}
               type="button"
-              onClick={() => setSelected(day)}
+              onClick={() => onSelect(day)}
               className={cn(
                 "rounded-lg py-1.5 text-sm tabular-nums transition-colors",
-                day === selected
+                day === value
                   ? "bg-blue-500 text-white"
                   : day === today
                     ? "text-blue-600 dark:text-blue-400"
@@ -113,22 +114,13 @@ export function CalendarPicker({
               onClick={() => jumpTo(day)}
               className={cn(
                 "rounded-xl border border-border/60 py-2 text-xs transition-colors hover:bg-muted/60",
-                selected === day && "border-blue-500 text-blue-600 dark:text-blue-400",
+                value === day && "border-blue-500 text-blue-600 dark:text-blue-400",
               )}
             >
               {item.label}
             </button>
           );
         })}
-      </div>
-
-      <div className="flex gap-2 pt-1">
-        <Button variant="outline" className="flex-1" onClick={onCancel}>
-          取消
-        </Button>
-        <Button className="flex-1" onClick={() => onConfirm(selected)}>
-          确定
-        </Button>
       </div>
     </div>
   );

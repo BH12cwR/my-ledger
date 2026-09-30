@@ -1,5 +1,6 @@
 import type { Db } from "../db/types";
 import {
+  countDaysInclusive,
   countMonthsInclusive,
   previousRange,
   resolveDayRange,
@@ -37,7 +38,11 @@ export interface SummaryResult {
   expenseCount: number;
   /** 区间内的转账笔数，单独计数，不计入收支 */
   transferCount: number;
+  /** 区间内的转账金额；同样不并入收支，只用于「收支总览」展示 */
+  transferCents: number;
   averageExpenseCents: number;
+  /** 区间内日均支出（支出合计 ÷ 区间自然日数），用于统计页「收支总览」 */
+  dailyAverageCents: number;
   /** 上一同长度周期的汇总；未请求环比时为 null */
   previous: SummaryComparison | null;
 }
@@ -131,8 +136,19 @@ function appendFilters(
   }
 }
 
-/** 由已算好的合计构造 summary，供单区间与首页概览复用，保证口径一致 */
-function buildSummary(
+/**
+ * 「只保留打了指定标签的账目」的附加条件，供分类详情的三处聚合共用。
+ *
+ * `alias` 只会是本文件里的字面量（"t" / "o"），不是外部输入；
+ * 未指定标签时返回空串，因此调用方可以直接把它拼在 WHERE 末尾，
+ * 绑参顺序也始终是「原有参数 + 可选的 tagId」。
+ */
+function tagFilterClause(alias: "t" | "o", tagId?: string): string {
+  if (!tagId) return "";
+  return ` AND EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = ${alias}.id AND tt.tag_id = ?)`;
+}
+
+/** 由已算好的合计构造 summary，供单区间与首页概览复用，保证口径一致 */function buildSummary(
   from: string,
   to: string,
   incomeCents: number,
@@ -140,8 +156,11 @@ function buildSummary(
   transactionCount: number,
   expenseCount: number,
   transferCount: number,
+  transferCents: number,
   previous: SummaryComparison | null = null,
 ): SummaryResult {
+  // 日均支出按「区间覆盖的自然日数」摊分；单日区间（今天）分母为 1，不会除零
+  const days = Math.max(countDaysInclusive(from, to), 1);
   return {
     from,
     to,
@@ -151,8 +170,10 @@ function buildSummary(
     transactionCount,
     expenseCount,
     transferCount,
+    transferCents,
     // 平均支出只按支出笔数摊分，否则会被收入笔数拉低
     averageExpenseCents: expenseCount > 0 ? Math.round(expenseCents / expenseCount) : 0,
+    dailyAverageCents: Math.round(expenseCents / days),
     previous,
   };
 }
@@ -163,6 +184,7 @@ type SummaryAggregateRow = {
   transaction_count: number;
   expense_count: number;
   transfer_count: number;
+  transfer_cents: number;
 };
 
 /** 单区间的收支聚合。本期与环比上期复用同一段 SQL，避免两处口径漂移 */
@@ -184,7 +206,8 @@ async function aggregateSummary(
          COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense_cents,
          COALESCE(SUM(CASE WHEN t.kind IN ('expense', 'income') THEN 1 ELSE 0 END), 0) AS transaction_count,
          COALESCE(SUM(CASE WHEN t.kind = 'expense'  THEN 1 ELSE 0 END), 0) AS expense_count,
-         COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count
+         COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count,
+         COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN t.amount_cents ELSE 0 END), 0) AS transfer_cents
        FROM transactions t
        WHERE ${conditions.join(" AND ")}`,
     )
@@ -197,6 +220,7 @@ async function aggregateSummary(
     transaction_count: row?.transaction_count ?? 0,
     expense_count: row?.expense_count ?? 0,
     transfer_count: row?.transfer_count ?? 0,
+    transfer_cents: row?.transfer_cents ?? 0,
   };
 }
 
@@ -235,6 +259,7 @@ export async function getSummary(
     current.transaction_count,
     current.expense_count,
     current.transfer_count,
+    current.transfer_cents,
     previous,
   );
 }
@@ -449,10 +474,18 @@ export async function getCategoryBreakdown(
 export async function getCategoryDetail(
   db: Db,
   userId: string,
-  options: { categoryId: string; from?: string; to?: string; kind?: "expense" | "income" },
+  options: {
+    categoryId: string;
+    from?: string;
+    to?: string;
+    kind?: "expense" | "income";
+    /** 可选：只看打了该标签的账目 */
+    tagId?: string;
+  },
 ): Promise<CategoryDetailResult> {
   const { from, to } = resolveDayRange(options.from, options.to);
   const kind = options.kind ?? "expense";
+  const tagParams = options.tagId ? [options.tagId] : [];
 
   const [totals, refund, period] = await Promise.all([
     db
@@ -462,10 +495,12 @@ export async function getCategoryDetail(
            FROM transactions t
           WHERE t.user_id = ? AND t.deleted_at IS NULL
             AND t.kind = ? AND t.category_id = ?
-            AND t.happened_on BETWEEN ? AND ?`,
+            AND t.happened_on BETWEEN ? AND ?${tagFilterClause("t", options.tagId)}`,
       )
-      .bind(userId, kind, options.categoryId, from, to)
+      .bind(userId, kind, options.categoryId, from, to, ...tagParams)
       .first<{ total_cents: number; transaction_count: number }>(),
+    // 退款记录的标签挂在被退的那笔支出上，所以标签条件加在 o 上而不是 r 上；
+    // 否则退款的标签若没被继承，这里会永远统计成 0
     db
       .prepare(
         `SELECT COALESCE(SUM(r.amount_cents), 0) AS refund_cents
@@ -473,18 +508,19 @@ export async function getCategoryDetail(
            JOIN transactions o ON o.id = r.refund_of_id
           WHERE r.user_id = ? AND r.deleted_at IS NULL
             AND o.category_id = ?
-            AND r.happened_on BETWEEN ? AND ?`,
+            AND r.happened_on BETWEEN ? AND ?${tagFilterClause("o", options.tagId)}`,
       )
-      .bind(userId, options.categoryId, from, to)
+      .bind(userId, options.categoryId, from, to, ...tagParams)
       .first<{ refund_cents: number }>(),
+    // 占比的分母必须跟着标签一起收窄，否则「某标签占该分类的比例」会被全量分母稀释
     db
       .prepare(
         `SELECT COALESCE(SUM(t.amount_cents), 0) AS total_cents
            FROM transactions t
           WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.kind = ?
-            AND t.happened_on BETWEEN ? AND ?`,
+            AND t.happened_on BETWEEN ? AND ?${tagFilterClause("t", options.tagId)}`,
       )
-      .bind(userId, kind, from, to)
+      .bind(userId, kind, from, to, ...tagParams)
       .first<{ total_cents: number }>(),
   ]);
 
@@ -571,7 +607,7 @@ export async function getDashboardOverview(db: Db, userId: string) {
   const monthStart = `${today.slice(0, 7)}-01`;
 
   // 本月与今日共用一次表扫描：今日指标由 CASE WHEN 在 SELECT 中派生。
-  // 注意绑参顺序——SELECT 中的 5 个「今日」占位符排在 WHERE 参数之前。
+  // 注意绑参顺序——SELECT 中的 6 个「今日」占位符排在 WHERE 参数之前。
   const [summaryRow, breakdown, budgets] = await Promise.all([
     db
       .prepare(
@@ -585,22 +621,26 @@ export async function getDashboardOverview(db: Db, userId: string) {
            COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS today_expense_cents,
            COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind IN ('expense', 'income') THEN 1 ELSE 0 END), 0) AS today_transaction_count,
            COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'expense' THEN 1 ELSE 0 END), 0) AS today_expense_count,
-           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS today_transfer_count
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'transfer' THEN 1 ELSE 0 END), 0) AS today_transfer_count,
+           COALESCE(SUM(CASE WHEN t.kind = 'transfer' THEN t.amount_cents ELSE 0 END), 0) AS transfer_cents,
+           COALESCE(SUM(CASE WHEN t.happened_on = ? AND t.kind = 'transfer' THEN t.amount_cents ELSE 0 END), 0) AS today_transfer_cents
          FROM transactions t
         WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.happened_on BETWEEN ? AND ?`,
       )
-      .bind(today, today, today, today, today, userId, monthStart, today)
+      .bind(today, today, today, today, today, today, userId, monthStart, today)
       .first<{
         income_cents: number;
         expense_cents: number;
         transaction_count: number;
         expense_count: number;
         transfer_count: number;
+        transfer_cents: number;
         today_income_cents: number;
         today_expense_cents: number;
         today_transaction_count: number;
         today_expense_count: number;
         today_transfer_count: number;
+        today_transfer_cents: number;
       }>(),
     getCategoryBreakdown(db, userId, { from: monthStart, to: today, kind: "expense" }),
     getBudgetOverview(db, userId, today),
@@ -615,6 +655,7 @@ export async function getDashboardOverview(db: Db, userId: string) {
       summaryRow?.transaction_count ?? 0,
       summaryRow?.expense_count ?? 0,
       summaryRow?.transfer_count ?? 0,
+      summaryRow?.transfer_cents ?? 0,
     ),
     today: buildSummary(
       today,
@@ -624,6 +665,7 @@ export async function getDashboardOverview(db: Db, userId: string) {
       summaryRow?.today_transaction_count ?? 0,
       summaryRow?.today_expense_count ?? 0,
       summaryRow?.today_transfer_count ?? 0,
+      summaryRow?.today_transfer_cents ?? 0,
     ),
     topCategories: breakdown.items.slice(0, 5),
     budgets,

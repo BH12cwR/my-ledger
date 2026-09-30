@@ -8,6 +8,7 @@ import { money, weekdayLabel } from "@/lib/format";
  *
  * 后端按日返回时已补齐空日期，所以这里固定渲染 7 根柱；
  * 0 值柱保留占位并显示 0.00，避免柱数随数据变化而跳动。
+ * 柱子是支出，沿用项目的「支出用 rose」约定。
  */
 export function WeeklyBars({ points }: { points: TrendPoint[] }) {
   const max = Math.max(...points.map((point) => point.expenseCents), 0);
@@ -23,7 +24,7 @@ export function WeeklyBars({ points }: { points: TrendPoint[] }) {
             </span>
             <div className="flex h-28 w-full items-end justify-center">
               <div
-                className="w-4 rounded-full bg-blue-500/80"
+                className="w-3.5 rounded-t-md bg-rose-500/85"
                 style={{ height: `${height}%` }}
                 aria-hidden
               />

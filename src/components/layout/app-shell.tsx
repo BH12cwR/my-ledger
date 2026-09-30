@@ -33,16 +33,22 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // 记账页是全屏编辑器：底部被数字键盘占据，隐藏导航并去掉为其预留的下边距
-  const isEditor = pathname === "/transactions/new";
+  /**
+   * 底部导航只属于两个 Tab 根路径。
+   *
+   * 设计稿里的二级页（搜索 / 筛选 / 统计 / 分类详情 / 账户明细 / 记账）都是全屏推入页，
+   * 底部没有导航栏；只有账单页与资产页挂导航。二级页因此也不再为导航预留下边距 ——
+   * 这也让「筛选页确定吸底」不会与导航重叠。
+   */
+  const showNav = pathname === "/" || pathname === "/assets";
 
   return (
     <>
       <ServiceWorkerRegistrar />
-      <main className={cn("mx-auto w-full max-w-2xl px-4 pt-6", isEditor ? "pb-4" : "pb-28")}>
+      <main className={cn("mx-auto w-full max-w-2xl px-4 pt-6", showNav ? "pb-28" : "pb-4")}>
         {children}
       </main>
-      {isEditor ? null : <BottomNav />}
+      {showNav ? <BottomNav /> : null}
     </>
   );
 }

@@ -263,7 +263,7 @@
 | `categoryId` | — | 精确匹配 |
 | `accountId` | — | 精确匹配**账户的两端**：命中 `accountId`（转出）或 `toAccountId`（转入）。转账对两端余额都有影响，只看转出会让流入该账户的转账消失 |
 | `keyword` | — | 模糊匹配备注 / 分类名 / **金额**（按「元」保留两位小数后匹配，整数或小数都能命中），最长 50 字 |
-| `sort` | `desc` | `desc` 由近到远 / `asc` 由远到近 |
+| `sort` | `desc` | 排序键与方向：`desc` / `asc` 按业务日；`amount_desc` / `amount_asc` 按金额（统计页「账单列表」抽屉的「统计」按钮用）。按金额排时会再挂 `happened_at DESC, created_at DESC` 作为稳定键，否则金额相同的多行翻页会重复或漏出 |
 | `page` | 1 | ≥ 1 |
 | `pageSize` | 20 | 1 - 100 |
 
@@ -357,7 +357,8 @@
 { "data": {
   "from": "2026-08-29", "to": "2026-09-27",
   "incomeCents": 1200000, "expenseCents": 456780, "netCents": 743220,
-  "transactionCount": 24, "expenseCount": 20, "transferCount": 2, "averageExpenseCents": 22839,
+  "transactionCount": 24, "expenseCount": 20, "transferCount": 2, "transferCents": 50000,
+  "averageExpenseCents": 22839, "dailyAverageCents": 15226,
   "previous": null
 } }
 ```
@@ -367,7 +368,9 @@
 | `transactionCount` | 区间内**收支**笔数（含收入，**不含转账**） |
 | `expenseCount` | 区间内**支出**笔数 |
 | `transferCount` | 区间内**转账**笔数，单独计数，不计入收支 |
+| `transferCents` | 区间内**转账金额**合计，同样不并入收支，仅用于统计页「收支总览」展示 |
 | `averageExpenseCents` | 单笔平均支出，分母是 `expenseCount` 而非 `transactionCount`，避免被收入笔数摊薄 |
+| `dailyAverageCents` | 日均支出 = `expenseCents /` 区间覆盖的自然日数（含首尾），用于统计页「收支总览」 |
 | `previous` | `compare=1` 时为上一**同长度**周期（`{ from, to, incomeCents, expenseCents, netCents }`），否则为 `null` |
 
 `compare=1`（或 `true`）由服务端一次返回两期，前端不需要再发第二次请求。上期区间取本期起点前一天往前推同样天数，例如 `2026-09-01~2026-09-30` 的上期为 `2026-08-02~2026-08-31`。
@@ -408,7 +411,7 @@
 
 未分类账目的 `id` 为 `null`，`name` 为「未分类」。
 
-### `GET /api/stats/category?categoryId=&from=&to=&kind=expense|income`
+### `GET /api/stats/category?categoryId=&from=&to=&kind=expense|income&tagId=`
 
 单个分类的详情指标（分类详情页用）。
 
@@ -421,12 +424,16 @@
 } }
 ```
 
+| 参数 | 说明 |
+| --- | --- |
+| `tagId` | 可选。只看打了该标签的账目；**三处聚合（总额 / 退款 / 占比分母）一起收窄**，退款按来源支出的标签过滤（退款记录本身不继承标签）。分类详情页顶栏的筛选图标用它 |
+
 | 字段 | 说明 |
 | --- | --- |
 | `averagePerTransactionCents` | `totalCents / transactionCount`（四舍五入，笔数为 0 时为 0） |
 | `averagePerMonthCents` | `totalCents / monthCount`，`monthCount` 为区间覆盖的自然月数（含首尾） |
 | `refundCents` | 区间内**退款记录**中，来源支出属于该分类的金额合计（退款本身是收入记录、不带分类，故需回查来源） |
-| `sharePercentage` | 该分类金额占同期同类型总额的百分比 |
+| `sharePercentage` | 该分类金额占同期同类型总额的百分比；带 `tagId` 时分子分母都按该标签收窄 |
 
 `categoryId` 必填，缺失时返回 400。
 

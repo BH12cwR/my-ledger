@@ -75,8 +75,11 @@ export interface TransactionDateRange {
   lastDay: string | null;
 }
 
-/** 账目查询的排序方向 */
-export type TransactionSort = "desc" | "asc";
+/**
+ * 账目查询的排序键。
+ * `desc` / `asc` 按业务日（缺省即 desc）；`amount_desc` / `amount_asc` 按金额。
+ */
+export type TransactionSort = "desc" | "asc" | "amount_desc" | "amount_asc";
 
 export interface CategoryBreakdownResponse {
   from: string;

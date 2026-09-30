@@ -16,8 +16,10 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 /**
- * 移动端底部导航：四个主入口 + 居中的「记一笔」快捷按钮。
- * 这是 PWA 的主交互骨架，桌面端同样居中收窄展示。
+ * 移动端底部导航：`账单 / + / 资产` 三项，中间是「记一笔」FAB。
+ *
+ * 只在账单页与资产页这两个 Tab 根路径渲染（判断在 AppShell），
+ * 二级页是全屏推入页、不带导航。其余入口上移到账单页顶栏的四个图标。
  */
 export function BottomNav() {
   const pathname = usePathname();

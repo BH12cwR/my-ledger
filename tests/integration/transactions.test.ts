@@ -189,6 +189,14 @@ describe("listTransactions 过滤与分页", () => {
     expect(list.items.every((item) => item.kind === "expense")).toBe(true);
   });
 
+  it("sort=amount_desc / amount_asc 按金额排序", async () => {
+    const desc = await listTransactions(db, userId, q({ sort: "amount_desc" }));
+    expect(desc.items.map((item) => item.amount_cents)).toEqual([5000, 3000, 2000, 1000]);
+
+    const asc = await listTransactions(db, userId, q({ sort: "amount_asc" }));
+    expect(asc.items.map((item) => item.amount_cents)).toEqual([1000, 2000, 3000, 5000]);
+  });
+
   it("keyword 同时匹配备注与分类名", async () => {
     const byNote = await listTransactions(db, userId, q({ keyword: "地铁" }));
     expect(byNote.total).toBe(2);

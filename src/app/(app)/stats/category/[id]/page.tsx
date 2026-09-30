@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { CategoryBadge } from "@/components/category-icon";
 import { EmptyBlock, ErrorBlock, LoadingBlock, ListSkeleton } from "@/components/layout/states";
 import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
+import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,6 +24,7 @@ import {
   type CategoryDetailResult,
   type CategoryDto,
   type Paginated,
+  type TagDto,
   type TransactionDto,
   type TrendResponse,
 } from "@/lib/api";
@@ -58,6 +60,9 @@ export default function CategoryDetailPage() {
   const [year, setYear] = useState(currentYear);
   /** null 表示「全年」；否则为 YYYY-MM */
   const [monthKey, setMonthKey] = useState<string | null>(null);
+  /** 顶栏筛选图标：按标签收窄本页的三处口径 */
+  const [tagId, setTagId] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [extra, setExtra] = useState<{ page: number; items: TransactionDto[] }>({
     page: 0,
     items: [],
@@ -80,6 +85,7 @@ export default function CategoryDetailPage() {
   }, [year, monthKey]);
 
   const categories = useApiQuery<{ items: CategoryDto[] }>("/api/categories");
+  const tags = useApiQuery<{ items: TagDto[] }>("/api/tags");
   const category = (categories.data?.items ?? []).find((item) => item.id === categoryId) ?? null;
   // 分类类型决定统计口径；等分类字典到齐再发请求，避免先用错口径取一次数据
   const kind = category?.kind === "income" ? "income" : "expense";
@@ -87,7 +93,7 @@ export default function CategoryDetailPage() {
 
   const detail = useApiQuery<CategoryDetailResult>(
     ready
-      ? `/api/stats/category${buildQuery({ categoryId, kind, from: range.from, to: range.to })}`
+      ? `/api/stats/category${buildQuery({ categoryId, kind, tagId, from: range.from, to: range.to })}`
       : null,
   );
   const trend = useApiQuery<TrendResponse>(
@@ -97,6 +103,7 @@ export default function CategoryDetailPage() {
           from: `${year}-01-01`,
           to: `${year}-12-31`,
           categoryId,
+          tagId,
         })}`
       : null,
   );
@@ -105,6 +112,7 @@ export default function CategoryDetailPage() {
     ? `/api/transactions${buildQuery({
         categoryId,
         kind,
+        tagId,
         from: range.from,
         to: range.to,
         page: 1,
@@ -148,6 +156,7 @@ export default function CategoryDetailPage() {
         `/api/transactions${buildQuery({
           categoryId,
           kind,
+          tagId,
           from: range.from,
           to: range.to,
           page: nextPage,
@@ -213,6 +222,15 @@ export default function CategoryDetailPage() {
         >
           <ChevronRight />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="筛选"
+          onClick={() => setFilterOpen(true)}
+          className={cn(tagId && "text-blue-600 dark:text-blue-400")}
+        >
+          <SlidersHorizontal />
+        </Button>
       </header>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -246,10 +264,7 @@ export default function CategoryDetailPage() {
             <Metric label={`总${kindLabel}`} value={money(detail.data?.totalCents ?? 0)} tone={kind} />
             <Metric label="总笔数" value={`${detail.data?.transactionCount ?? 0}`} />
             <Metric label="平均每笔" value={money(detail.data?.averagePerTransactionCents ?? 0)} />
-            <Metric
-              label={`平均每月 · ${detail.data?.monthCount ?? 0} 个月`}
-              value={money(detail.data?.averagePerMonthCents ?? 0)}
-            />
+            <Metric label="平均每月" value={money(detail.data?.averagePerMonthCents ?? 0)} />
             <Metric label="退款" value={money(detail.data?.refundCents ?? 0)} tone="income" />
           </CardContent>
         </Card>
@@ -309,17 +324,17 @@ export default function CategoryDetailPage() {
       </Card>
 
       <Card>
-        <CardContent className="flex items-center gap-3 py-1">
+        <CardContent className="flex flex-col items-center gap-2 py-2 text-center">
           <CategoryBadge icon={category.icon} color={category.color} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{category.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {monthKey ? monthLabel(monthKey) : `${year}年`} 合计 · 占比{" "}
-              {detail.data?.sharePercentage ?? 0}%
-            </p>
-          </div>
-          <span className="shrink-0 font-mono text-sm tabular-nums">
+          <p className="truncate text-sm font-medium">{category.name}</p>
+          <p className="font-mono text-xl font-semibold tabular-nums">
             {money(detail.data?.totalCents ?? 0)}
+          </p>
+          <span
+            className="rounded-full border px-2.5 py-0.5 text-xs tabular-nums"
+            style={{ borderColor: category.color, color: category.color }}
+          >
+            {detail.data?.sharePercentage ?? 0}%
           </span>
         </CardContent>
       </Card>
@@ -352,7 +367,79 @@ export default function CategoryDetailPage() {
         onChanged={refreshAll}
         onEdit={(transaction) => router.push(`/transactions/new?id=${transaction.id}`)}
       />
+
+      <BottomSheet open={filterOpen} onOpenChange={setFilterOpen}>
+        <BottomSheetContent
+          title="筛选"
+          footer={
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setTagId("");
+                  setFilterOpen(false);
+                }}
+              >
+                重置
+              </Button>
+              <Button className="flex-1" onClick={() => setFilterOpen(false)}>
+                完成
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-1 pt-1">
+            <p className="px-1 pb-1 text-xs leading-relaxed text-muted-foreground">
+              本页的分类与类型已固定，可按标签进一步收窄 —— 标签会同时作用于指标、柱状图与明细。
+            </p>
+            <TagOption label="全部标签" active={tagId === ""} onClick={() => setTagId("")} />
+            {(tags.data?.items ?? []).map((tag) => (
+              <TagOption
+                key={tag.id}
+                label={tag.name}
+                color={tag.color}
+                active={tagId === tag.id}
+                onClick={() => setTagId(tag.id)}
+              />
+            ))}
+          </div>
+        </BottomSheetContent>
+      </BottomSheet>
     </div>
+  );
+}
+
+/** 筛选抽屉里的一行标签；带 color 时在名称前画一个色点 */
+function TagOption({
+  label,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  color?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/60",
+        active && "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      )}
+    >
+      {color ? (
+        <span
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
+      ) : null}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
   );
 }
 

@@ -63,8 +63,12 @@ export const listTransactionsQuerySchema = z.object({
   accountId: z.string().trim().min(1).optional(),
   tagId: z.string().trim().min(1).optional(),
   keyword: z.string().trim().max(50, "搜索关键词过长").optional(),
-  /** 时间排序方向；缺省（undefined）即由近到远，服务层据此回落到 desc */
-  sort: z.enum(["desc", "asc"]).optional(),
+  /**
+   * 排序键与方向：`desc` / `asc` 按业务日排（缺省即 desc，由近到远）；
+   * `amount_desc` / `amount_asc` 按金额排（统计页「账单列表」抽屉的「统计」按钮用）。
+   * 取值来自 zod 枚举的白名单，服务层可以安全地拼进 SQL。
+   */
+  sort: z.enum(["desc", "asc", "amount_desc", "amount_asc"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -168,12 +172,13 @@ export const statsQuerySchema = z.object({
   tagId: z.string().trim().min(1).optional(),
 });
 
-/** 分类详情：必须指定分类，时间区间默认最近 30 天 */
+/** 分类详情：必须指定分类，时间区间默认最近 30 天；可按标签进一步收窄 */
 export const categoryDetailQuerySchema = z.object({
   categoryId: z.string().trim().min(1, "缺少分类标识").max(64, "标识长度超出限制"),
   from: daySchema.optional(),
   to: daySchema.optional(),
   kind: categoryKindSchema.default("expense"),
+  tagId: z.string().trim().min(1).optional(),
 });
 
 export const trendQuerySchema = z.object({

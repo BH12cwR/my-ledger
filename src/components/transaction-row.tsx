@@ -1,14 +1,23 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { CategoryBadge } from "@/components/category-icon";
-import { money } from "@/lib/format";
+import { money, dayLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { TransactionDto } from "@/lib/api";
+
+/** 行首小圆点的类型色，与金额同色系（500 档在小圆点尺寸下更可见） */
+const DOT_COLORS = {
+  expense: "#f43f5e",
+  income: "#10b981",
+  transfer: "#3b82f6",
+} as const;
 
 /**
  * 账目行：首页、明细页与后台监控共用同一套渲染，
  * 保证「一笔账在不同页面看起来是同一条记录」。
+ *
+ * 行首是一个类型色小圆点（跟设计稿），不是分类图标 —— 少了 36px 的色块，
+ * 行高明显变矮、单屏能多放几条；分类信息由紧随其后的分类名承担。
  */
 export function TransactionRow({
   transaction,
@@ -23,9 +32,11 @@ export function TransactionRow({
    * 分组粒度，决定日期与账户名各自出现在哪里：
    *  - `none`：不分组，副标题放备注 · 账户，金额下方放日期；
    *  - `day`：按日分组，日期已由组头给出，行内不再重复，账户名移到金额下方；
-   *  - `month`：按月分组，组头只有年月，行内必须保留日期（`09-27 快递费`）。
+   *  - `month`：按月分组，组头只有年月，行内保留完整日期（`2026-09-27 · 快递费`）；
+   *  - `flat`：不分组但每行自带日期（`09.28 · 火锅`），账户名在金额下方。
+   *    账单列表抽屉按金额排序时用它 —— 分组会按天把排序结果重新切碎。
    */
-  groupBy?: "none" | "day" | "month";
+  groupBy?: "none" | "day" | "month" | "flat";
   /**
    * 是否在金额下方重复账户名。账户明细页里整页都是同一个账户，
    * 逐行重复只是噪音，那里会关掉它。
@@ -44,7 +55,11 @@ export function TransactionRow({
   // 只有不分组时账户名才挤在副标题里，分组场景一律移到金额下方
   const accountInline = groupBy === "none";
   const subtitleParts = [
-    groupBy === "month" ? transaction.happenedOn : null,
+    groupBy === "month"
+      ? transaction.happenedOn
+      : groupBy === "flat"
+        ? dayLabel(transaction.happenedOn)
+        : null,
     transaction.note,
     // 转账的账户名已并入标题，普通账目才在副标题重复账户
     isTransfer || !accountInline ? null : transaction.accountName,
@@ -67,16 +82,14 @@ export function TransactionRow({
       onClick={onClick}
       disabled={!onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors",
+        "flex w-full items-center gap-2.5 rounded-xl px-1 py-2.5 text-left transition-colors",
         onClick && "hover:bg-muted/60",
       )}
     >
-      <CategoryBadge
-        icon={transaction.categoryIcon}
-        color={
-          transaction.categoryColor ??
-          (isTransfer ? "#3b82f6" : isIncome ? "#22c55e" : "#94a3b8")
-        }
+      <span
+        className="size-2 shrink-0 rounded-full"
+        style={{ backgroundColor: DOT_COLORS[transaction.kind] }}
+        aria-hidden
       />
 
       <div className="min-w-0 flex-1">

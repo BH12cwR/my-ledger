@@ -30,12 +30,15 @@ function BottomSheetContent({
   title,
   children,
   footer,
+  headerAction,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   title: string;
   /** 固定在抽屉底部、不随内容滚动的操作区 */
   footer?: React.ReactNode;
+  /** 标题行右侧的操作（如日期抽屉的「取消 / 确定」），给了它就通常不再需要关闭按钮 */
+  headerAction?: React.ReactNode;
   showCloseButton?: boolean;
 }) {
   return (
@@ -62,9 +65,12 @@ function BottomSheetContent({
           <DialogPrimitive.Title className="font-heading text-base font-medium">
             {title}
           </DialogPrimitive.Title>
+          {headerAction ? (
+            <div className="ml-auto flex shrink-0 items-center gap-1">{headerAction}</div>
+          ) : null}
           {showCloseButton ? (
             <DialogPrimitive.Close asChild>
-              <Button variant="ghost" size="icon-sm" className="ml-auto">
+              <Button variant="ghost" size="icon-sm" className={headerAction ? undefined : "ml-auto"}>
                 <XIcon />
                 <span className="sr-only">关闭</span>
               </Button>
