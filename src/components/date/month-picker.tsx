@@ -53,8 +53,9 @@ export function MonthPicker({
   const selectedMonth = Number(value.slice(5, 7));
   const [activeYear, setActiveYear] = useState(selectedYear);
   const [startDayOpen, setStartDayOpen] = useState(false);
-  // 以选中月份所在年份为基准前后各留几年，列表本身保持稳定（切换年份不会整行重排）
-  const years = Array.from({ length: 7 }, (_, index) => selectedYear + 1 - index);
+  // 以选中月份的年份为中心前后对称各留 3 年（原先只留「1 个未来 + 5 个过去」，
+  // 明年之后的月份根本选不到）；列表本身稳定，切换年份不会整行重排
+  const years = Array.from({ length: 7 }, (_, index) => selectedYear + 3 - index);
 
   return (
     <div className="flex flex-col gap-4 pb-1">

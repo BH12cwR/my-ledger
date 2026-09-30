@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   daysInMonth,
@@ -22,9 +22,14 @@ const QUICK_DAYS = [
   { label: "前天", delta: -2 },
 ];
 
+const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
+
+/** 月份标题下拉里横滑的年份：当前年的前后各两年 */
+const YEAR_SPAN = [2, 1, 0, -1, -2];
+
 /**
  * 日期抽屉「变体 B」：记账页选具体某一天。
- * 月份导航 + 日历网格 + 今天/昨天/前天快捷。
+ * 月份导航（可下拉跳月）+ 日历网格 + 今天/昨天/前天快捷。
  *
  * 「取消 / 确定」不在这里 —— 它们由 `CalendarSheet` 放在抽屉标题行右侧（跟设计稿），
  * 本组件只负责「显示哪一天」与「选了哪一天」。抽屉每次打开都会重新挂载，
@@ -40,6 +45,12 @@ export function CalendarPicker({
 }) {
   const today = todayInBusinessTimezone();
   const [cursor, setCursor] = useState(() => monthOf(value));
+  /** 月份标题的下拉：只改「正在浏览的月份」，不动已选日期 */
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const cursorYear = Number(cursor.slice(0, 4));
+  const cursorMonth = cursor.slice(5);
+  const years = YEAR_SPAN.map((delta) => cursorYear + delta);
 
   const firstWeekday = weekdayOf(`${cursor}-01`);
   const total = daysInMonth(cursor);
@@ -51,6 +62,7 @@ export function CalendarPicker({
   function jumpTo(day: string) {
     onSelect(day);
     setCursor(monthOf(day));
+    setPickerOpen(false);
   }
 
   return (
@@ -64,7 +76,22 @@ export function CalendarPicker({
         >
           <ChevronLeft />
         </Button>
-        <span className="text-sm font-medium">{monthLabel(cursor)}</span>
+        <button
+          type="button"
+          onClick={() => setPickerOpen((open) => !open)}
+          aria-expanded={pickerOpen}
+          aria-label="选择年月"
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium transition-colors hover:bg-muted/60"
+        >
+          {monthLabel(cursor)}
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted-foreground transition-transform",
+              pickerOpen && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </button>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -74,6 +101,50 @@ export function CalendarPicker({
           <ChevronRight />
         </Button>
       </div>
+
+      {pickerOpen ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-border/60 p-2">
+          <div className="-mx-1 flex gap-1 overflow-x-auto px-1">
+            {years.map((year) => (
+              <button
+                key={year}
+                type="button"
+                // 换年份时保留当前月份，避免跳到 1 月又要重新找回月份
+                onClick={() => setCursor(`${year}-${cursorMonth}`)}
+                className={cn(
+                  "shrink-0 rounded-lg px-3 py-1.5 text-sm tabular-nums transition-colors",
+                  year === cursorYear ? "bg-blue-500 text-white" : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {year}年
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {MONTHS.map((month) => {
+              const key = `${cursorYear}-${String(month).padStart(2, "0")}`;
+              return (
+                <button
+                  key={month}
+                  type="button"
+                  onClick={() => {
+                    setCursor(key);
+                    setPickerOpen(false);
+                  }}
+                  className={cn(
+                    "rounded-lg border py-2 text-sm transition-colors",
+                    key === cursor
+                      ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                      : "border-border/60 hover:bg-muted/60",
+                  )}
+                >
+                  {month}月
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-7 gap-1 text-center">
         {WEEKDAYS.map((label) => (
