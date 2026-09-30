@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpDown, ChevronDown, Search, SlidersHorizontal } from "lucide-react";
-import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
+import { ArrowUpDown, ChevronDown, Search, SlidersHorizontal } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyBlock, ErrorBlock, InlineError, ListSkeleton } from "@/components/layout/states";
 import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
-import { SummaryCell } from "@/components/transaction/summary-cell";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Chip, chipClass } from "@/components/ui/chip";
+import { METRIC_GRID_CLASS, MetricCell } from "@/components/ui/metric-cell";
 import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   api,
   errorMessage,
@@ -19,6 +21,7 @@ import {
   type TransactionsSummary,
 } from "@/lib/api";
 import { useApiQuery } from "@/lib/hooks";
+import { money } from "@/lib/format";
 import {
   EMPTY_SEARCH_FILTERS,
   SEARCH_KIND_OPTIONS,
@@ -138,47 +141,29 @@ export default function SearchPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label="返回" onClick={() => router.push("/")}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="font-heading text-lg font-semibold">搜索账单</h1>
-      </header>
+      <PageHeader title="搜索账单" onBack={() => router.push("/")} />
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setKindSheetOpen(true)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs transition-colors hover:bg-muted/60",
-            filters.kind && "border-blue-500/40 text-blue-600 dark:text-blue-400",
-          )}
-        >
+        <Chip active={Boolean(filters.kind)} onClick={() => setKindSheetOpen(true)}>
           {kindLabel}
           <ChevronDown className="size-3.5" />
-        </button>
-        <Link
-          href={filterHref}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs transition-colors hover:bg-muted/60",
-            filterActive && "border-blue-500/40 text-blue-600 dark:text-blue-400",
-          )}
-        >
+        </Chip>
+        <Link href={filterHref} className={chipClass({ active: filterActive })}>
           筛选
           <ChevronDown className="size-3.5" />
         </Link>
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-border/60 px-3">
+      <div className="flex items-center gap-2 rounded-lg border border-border/60 px-2.5">
         <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <input
           value={keywordDraft}
           maxLength={50}
           placeholder="搜索：分类、备注、金额"
           onChange={(event) => setKeywordDraft(event.target.value)}
-          className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-base outline-none placeholder:text-muted-foreground md:text-sm"
         />
-        <Link href={filterHref} aria-label="筛选" className="shrink-0 py-2">
+        <Link href={filterHref} aria-label="筛选" className="shrink-0 py-1.5">
           <SlidersHorizontal className="size-4 text-muted-foreground" />
         </Link>
       </div>
@@ -200,17 +185,26 @@ export default function SearchPage() {
                   }))
                 }
               >
-                <ArrowUpDown className={cn(filters.sort === "asc" && "text-blue-600")} />
+                <ArrowUpDown className={cn(filters.sort === "asc" && "text-brand-text")} />
               </Button>
             </span>
           </CardAction>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm">
-          <SummaryCell label="支出" cents={summary.data?.expenseCents} tone="expense" />
-          <SummaryCell label="收入" cents={summary.data?.incomeCents} tone="income" />
-          <SummaryCell label="结余" cents={summary.data?.netCents} />
-          <SummaryCell label="转账/还款" cents={summary.data?.transferCents} tone="transfer" />
-          <SummaryCell label="退款" cents={summary.data?.refundCents} tone="income" />
+        <CardContent className={METRIC_GRID_CLASS}>
+          <MetricCell label="支出" value={money(summary.data?.expenseCents)} tone="expense" />
+          <MetricCell label="收入" value={money(summary.data?.incomeCents)} tone="income" />
+          <MetricCell label="结余" value={money(summary.data?.netCents)} />
+          <MetricCell
+            label="转账/还款"
+            value={money(summary.data?.transferCents)}
+            tone="transfer"
+          />
+          <MetricCell
+            label="退款"
+            value={money(summary.data?.refundCents)}
+            tone="income"
+            className="col-span-2"
+          />
         </CardContent>
       </Card>
 
@@ -232,9 +226,7 @@ export default function SearchPage() {
                 {loadingMore ? "加载中…" : "加载更多"}
               </Button>
             ) : null}
-            {moreError ? (
-              <p className="text-center text-xs text-destructive">{moreError}</p>
-            ) : null}
+            {moreError ? <InlineError>{moreError}</InlineError> : null}
           </>
         )}
       </section>
@@ -258,9 +250,8 @@ export default function SearchPage() {
                   setKindSheetOpen(false);
                 }}
                 className={cn(
-                  "rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/60",
-                  filters.kind === option.value &&
-                    "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+                  "rounded-xl px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/60",
+                  filters.kind === option.value && "bg-brand/10 text-brand-text",
                 )}
               >
                 {option.label}

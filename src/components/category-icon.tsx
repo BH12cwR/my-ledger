@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NEUTRAL_COLOR } from "@/lib/palette";
 
 /**
  * 分类 / 账户图标。
@@ -101,7 +102,7 @@ export function CategoryBadge({
         "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
         className,
       )}
-      style={{ backgroundColor: `${color ?? "#94a3b8"}1f` }}
+      style={{ backgroundColor: `${color ?? NEUTRAL_COLOR}1f` }}
     >
       <CategoryIcon name={icon} color={color} />
     </span>

@@ -73,6 +73,55 @@
 5. **环境徽章与占比条**：统计页每行显示 环比徽章（▲ 涨 / ▼ 跌）+ 占比进度条，颜色取自分类色。
 6. **空值展示**：**（期 6 修订）**按页拆分 —— 账单页「最近七日支出」的 0 值柱保留占位并显示 `0.00`；分类详情页 12 个月柱状图的 0 值柱不显示柱顶金额。原文「一律显示 `0.00`」与设计稿不符。
 
+### 2.7 样式规范（期 7 收口，2026-10-01）
+
+> 依据：[`style-consistency-audit.md`](./style-consistency-audit.md) 的横向走查（页面 ↔ 页面）。
+> 之前 §2.1–§2.6 管的是「交互形态」，这一节管「长什么样」—— 它们此前**没有成文规范**，只靠每期临场决定，于是同一个语义长出了 3–5 种实现。
+
+1. **语义色只有两组，各有单一来源**（`globals.css`）：
+   - `--brand*` 管**主操作与选中态**：主按钮、FAB、导航激活、选中胶囊、Hero 渐变。
+   - `--tone-{expense,income,transfer}*` 管**账目类型标识**：图表、类型色点、分段实底、金额文字。
+   - 两者目前共用同一个蓝，但**语义独立** —— 改品牌色不该连带改掉「转账」的类型色。
+   - 类型色只有**实底**与**文字**两档；浅底一律用透明度修饰符（`bg-tone-expense/10`）。
+   - **禁止**在业务代码里写 `rose/emerald/blue-500` 这类调色板类或 HEX；`--chart-1..5` 已删除（从未被引用）。
+   - 例外一：分类 / 标签颜色是**用户数据**（写库的 HEX），见 `lib/palette.ts`。
+   - 例外二：预算进度条的琥珀档 `bg-amber-500` 是阈值语义，暂不 token 化。
+2. **`--primary` 已改为品牌蓝**（`#2563eb`）。此前是近黑，导致「主按钮是黑、选中态是蓝」两个强调色并存。
+3. **暗色主题保留变体但暂不启用**：`globals.css` 的 `.dark` 色板与代码里的 `dark:` 变体全部保留，但**没有 ThemeProvider、没有任何写入 `.dark` 的位置**，因此当前不可达。改配色时仍需同步维护 `dark:` 分支；若要启用，只需挂 `next-themes` 的 Provider。
+4. **字号只有六档**，业务代码不再出现任意值字号（`text-[13px]` 这种）：
+
+   | 档 | 值 | 用途 |
+   | --- | --- | --- |
+   | `display` | `text-3xl` semibold + tracking-tight | Hero 卡金额（全项目唯一） |
+   | `input` | `text-2xl` semibold | 记账页金额输入 |
+   | `emph` | `text-xl` semibold | 卡片主额（分类详情汇总、后台 StatCard） |
+   | `title` | `text-lg` semibold | 页面标题（`h1`） |
+   | `title-sm` | `text-base` medium | 卡片标题 / 抽屉标题 / DialogTitle |
+   | `body` | `text-sm` | 正文、列表主标题、**指标格与行内金额** |
+   | `caption` | `text-xs` | 次要正文行、说明 |
+   | `micro` | `text-[10px]` | 徽章、图表标签、柱顶金额、导航标签 |
+
+   **微字号从 9/10/11/12 四档收敛为 10 + 12 两档** —— 9px 与 11px 已全部消除。
+5. **每个页面有且仅有一个 `h1`**：可见标题走 `PageHeader`；Tab 根页首屏即数据卡时（资产页）用 `sr-only`。
+6. **间距**：页面根容器 `gap-4`；卡片内字段组 / 列表 `gap-3`；抽屉选项 `gap-1`；指标格网格 `gap-3`（条目为奇数时**末格一律 `col-span-2`**）。
+7. **列表行内边距按所在容器分三类**，不再各写各的：
+   - Card 内或页面级无卡列表 → `px-1 py-2.5`
+   - 独立带边框容器内 → `px-3 py-2.5`
+   - 抽屉内 → `px-2 py-2.5`
+8. **壳尺寸统一走变量**（`globals.css`）：`--shell-max-w` / `--pb-nav` / `--pb-bottom-bar` / `--pb-keypad`。吸底操作条、数字键盘、抽屉壳一律引用，禁止再硬编码 `max-w-2xl` 或 `pb-28` / `pb-24`。
+9. **容器面两种写法按来源划分**：`Card` 与弹层用 `ring-1 ring-foreground/10`（shadcn 既定）；页内自建容器用 `border border-border/60`。分隔线一律 `border-border/60`。
+10. **共享组件契约**（新增，禁止再各页复制）：
+    - `PageHeader`：`{ title, onBack?, actions?, subtitle? }`。二级页一律 `←`；**唯一例外**是全屏模态的记账页（`X` + 类型分段，自带 `sr-only` h1）。
+    - `HeroCard`：`{ label?, value, top?, children? }`，**金额一律左对齐**、副文案统一 `text-white/85`。
+    - `MetricCell`：`{ label, value, tone?, variant: "box" | "plain", span? }`。金额**一律带 ¥**（同网格里还有「总笔数」这类纯数字，不带符号分不清）。
+    - `SegmentedControl`：`{ size: "sm" | "md", tone: "type" | "neutral" }`。`size=md` 用于口径切换、`sm` 用于粒度/视图切换；**同一 state 的两处控件必须同 size**。
+    - `Chip` / `chipClass()`：统一 `rounded-full`，`md`（带图标）/ `sm`（纯文字）两档。
+    - `Badge`：紧凑档用 `size="sm"`（10px），**不再用 `className="text-[10px]"` 覆盖**（cva 不合并类名，靠 className 覆盖不可靠）。
+    - `ListSkeleton`：`variant: "rows" | "avatars" | "cards"`，分别对齐流水行 / 资产行 / 管理行。
+    - `InlineEmpty` / `InlineError`：图表区与抽屉里的「一行提示」。
+11. **自制输入框必须对齐 `Input` 的字号策略**（`text-base md:text-sm`，移动端 16px 防 iOS 聚焦缩放）。搜索框与记账页备注行保留各自的容器形态，但内层 `input` 字号与圆角跟 `Input` 一致。
+12. **`font-heading` 已删除**：它原本等于 `font-sans`（`--font-heading: var(--font-sans)`），是空操作，却挂在 13 个 `h1` 与各标题组件上。
+
 ---
 
 ## 3. 逐页方案
@@ -391,6 +440,10 @@
 - `lib/dates.ts`（账期起始日、相对日文案、月份加减）、`lib/format.ts`（分组头、环比徽章文案）
 - 服务端：`validation/schemas.ts`、`services/transactions.ts`、`services/stats.ts`、`http/serialize.ts`，新增 `migrations/0006_transfer.sql`
 
+**期 7 新增 / 删除**（样式规范收口，见第 10 节）
+- 新增：`components/ui/hero-card.tsx`、`components/ui/metric-cell.tsx`、`components/ui/segmented-control.tsx`、`components/ui/chip.tsx`、`components/layout/page-header.tsx`、`lib/palette.ts`
+- 删除：`components/transaction/summary-cell.tsx`（并入 `ui/metric-cell.tsx`）
+
 ---
 
 ## 6. 分期落地建议（每期可独立验收）
@@ -403,6 +456,80 @@
 | 4 | 搜索账单页 + 自定义筛选页 | ✅ 已完成 |
 | 5 | 资产 Tab + 设置页入口收敛 + 旧 `/transactions` 重定向 | ✅ 已完成 |
 | 6 | 一致性走查裁决落地（见第 9 节）：统计页上半部按设计稿重做 + 账单列表抽屉 + 二级页隐藏导航 + 行首小圆点 + 日期抽屉 A「显示方式」+ 一批视觉修正 | ✅ 已完成 |
+| 7 | **跨页面样式规范收口**（见第 10 节 + §2.7）：语义色 token 化 + `--primary` 改蓝 + 微字号收敛 + 间距/内边距定型 + 抽 5 个共享组件 + 壳尺寸变量化 | ✅ 已完成 |
+
+> 期 7 的裁决与落地明细见 **第 10 节**；横向走查的 44 处原始差异见 [`style-consistency-audit.md`](./style-consistency-audit.md)。
+
+---
+
+## 10. 2026-10-01 跨页面样式走查裁决（期 7 范围）
+
+依据 [`style-consistency-audit.md`](./style-consistency-audit.md) 做了一次**横向**走查（页面 ↔ 页面：同一个语义在不同页面是不是同一套样式；与第 9 节的「设计稿 ↔ 实现」纵向比对互为补充，二者无重叠）。共 44 处不一致，分为 P0（零风险纯收敛）/ P1（抽组件）/ P2（需裁决）。
+
+### 10.1 裁决结论
+
+| # | 争议 | 结论 |
+| --- | --- | --- |
+| 1 | 暗色主题不可达，但 20+ 处 `dark:` 变体在逐处双写 | **保留变体、标注「待启用」**，本期不动代码（新建主题开关属于功能而非样式收口，且暗色从未做过视觉走查） |
+| 2 | `--primary` 是近黑，与应用识别色蓝冲突 | **`--primary` 改为品牌蓝**（`#2563eb`）：底导激活、FAB、主按钮、选中胶囊统一，只剩一套强调色 |
+| 3 | 微字号 9 / 10 / 11 / 12px 四档并存 | **收敛为两档**：徽章 / 图表标签 / 柱顶金额 / 导航标签 → `10px`；次要正文行 → `12px`。取消 9px 与 11px |
+| 4 | 搜索框与记账页备注行用原生 `input` + `text-sm`（移动端 14px，iOS 聚焦会缩放） | **保形态、对齐字号与圆角**：内层补 `text-base md:text-sm`，外层容器圆角对齐 `rounded-lg` |
+| 5 | 金额字号 6 档且字重随机 | **显式化为 5 档**（`display / input / emph / title? / body`，见 §2.7 第 4 条），`text-2xl` 的记账页输入补 `font-semibold` |
+| 6 | 三个「指标格」组件（`SummaryCell` / `Metric` / `OverviewCell`），前两者逐字重复 | **合并为 `MetricCell`**，两种版式 `box` / `plain`；`summary-cell.tsx` 已删除 |
+| 7 | 指标格金额有的带 ¥ 有的不带 | **一律带 ¥** —— 同一个网格里还有「总笔数」这种纯数字，不带符号分不出来 |
+
+### 10.2 期 7 落地的内容（P0 + P1 + P2 全部）
+
+**P2 · 基座**
+- `globals.css`：新增 `--brand / --brand-strong / --brand-text` 与 `--tone-{expense,income,transfer}[-text]`；`--primary` 改蓝；**删除 `--chart-1..5`**（灰阶、从未被引用）与 **`--font-heading`**（等于 `font-sans`，空操作）；新增壳尺寸变量 `--shell-max-w` / `--pb-nav` / `--pb-bottom-bar` / `--pb-keypad`。
+- `lib/palette.ts`（新增）：分类 / 标签调色板与无颜色兜底的**单一来源**（此前设置页第一格是 `#64748b`、`category-icon` 兜底是 `#94a3b8`）。
+- `ui/badge.tsx`：新增 `size="sm"`（`h-4 / px-1.5 / text-[10px]`），字号**移入 size 变体**——cva 不合并类名，此前 17 处靠 `className="text-[10px]"` 覆盖才能生效。
+- `layout/states.tsx`：新增 `InlineEmpty` / `InlineError`；`ListSkeleton` 拆 `rows` / `avatars` / `cards` 三档，默认档改为匹配当前流水行（不再按已被替换掉的「36px 分类图标圆 + 边框」打样）。
+
+**P1 · 共享组件（新增 5 个）**
+`ui/hero-card.tsx`、`ui/metric-cell.tsx`、`ui/segmented-control.tsx`、`ui/chip.tsx`、`layout/page-header.tsx` —— 契约见 §2.7 第 10 条。
+
+**P0 · 逐页收敛**
+- 微字号 9px / 11px 全部消除（14 处统一为 `10px`，次要正文行改 `text-xs`）。
+- 页面根容器统一 `gap-4`（账单页与资产页原为 `gap-5`）。
+- 列表行内边距由 5 种收敛为 3 类（见 §2.7 第 7 条）。
+- 类型色点统一 `size-2.5`（原 8px / 10px 两种）。
+- 补 `h1`：账单页标题改为 `h1` 包裹的月份选择按钮（原为 `font-medium` 的裸按钮，字重也不对）；资产页与记账页用 `sr-only`；登录 / 离线页补上 `font-heading` 移除后的统一写法。
+- 筛选页日期快捷项 `rounded-xl` → `rounded-full`（与搜索页筛选胶囊一致）。
+- 指标格网格 `gap-4` → `gap-3`；`/search` 与分类详情的 5 格补末格 `col-span-2`（统计页早已有，另两处漏了）。
+- 搜索框与记账页备注行对齐 `Input` 的字号策略。
+- 统计页两处口径分段控件统一为 `size="md"`（原来一屏内一个 `text-sm`、一个 `text-xs`，驱动的还是同一个 state）。
+- 硬编码 HEX 与调色板类：`stats` / `admin` / `transaction-row` 的图表色、20+ 处 `text-rose-600` 之类、七日柱的 `rose-500/85`、分段实底，全部改走 tone token。
+
+### 10.3 验证
+
+`tsc` / `eslint` / `vitest 199` / `next build` 全绿，静态页仍是静态（`○`）。
+
+浏览器实测（CDP 驱动，11 张截图，脚本 `.workbuddy/walkthrough/scenario-style.mjs`）逐条核对计算样式，关键结果：
+
+| 断言 | 实测 |
+| --- | --- |
+| 页面 `h1` | `2026年10月`，18px / 600 |
+| Hero 金额对齐 | `left`（账单页与资产页一致），渐变 `rgb(59,130,246) → rgb(37,99,235)` |
+| 行首类型色点 | 10px / `rgb(244,63,94)` |
+| 流水副标题 | 12px（原 11px） |
+| 统计页三个分段控件 | `统计粒度 12px@24px` · `统计口径 14px@32px` · `环形图口径 14px@32px` —— 同 state 两处同规格 |
+| 口径 / 月年 激活态 | `rgb(244,63,94)`（类型色实底） / 白色（中性胶囊） |
+| 指标格末格跨列 | 搜索汇总与分类详情均 5 格，首格 157px、末格 326px |
+| 指标格金额 | 一律带 ¥ |
+| 筛选胶囊 / 标签胶囊 / 搜索框 | `rounded-full` / `rounded-full` / 输入 16px + 容器 10px 圆角 |
+| 徽章（`size="sm"`） | 10px / 高 16px / padding 6px |
+| 记账页金额 | 24px / 600 / `rgb(225,29,72)` |
+| 主按钮与 FAB | `rgb(37,99,235)`（品牌蓝） |
+| 控制台报错 | 0 |
+
+### 10.4 实现期决定（期 7 落地时确认）
+
+1. **预算进度条的超支红复用 `--tone-expense`**，不另立 `--destructive` 红 —— 全项目只有一个红，用户看到红色就等于「花超了」。琥珀预警档保留 `bg-amber-500` 未 token 化。
+2. **`Chip` 的选中态统一为 `border-brand bg-brand/10 text-brand-text`**（原来描边深浅有 `/40`、`/50`、全不透明三档）。栅格磁贴类选项（月份网格、显示方式、分类磁贴）保留各自的软描边，属于不同控件形态。
+3. **`SegmentedControl` 的 `tone` 只有 `type`（类型色实底）与 `neutral`（白底胶囊）两值**，对应 §2.4 的「按场景两套」；新增控件不允许再出现第三种活跃态。
+4. **`MetricCell` 的 `box` 版式底宽固定 `rounded-lg bg-muted/60`**，`plain` 版式无底色、居中、值 `text-lg`；两者都显式声明值字号，不再依赖父级 `text-sm` 继承。
+5. **`ListSkeleton` 的默认档跟流水行**（最热路径），资产行与管理行通过 `variant` 指定；不为「图表占位」另建组件（图表区继续沿用默认档，视觉上是一行行占位块）。
 
 ---
 

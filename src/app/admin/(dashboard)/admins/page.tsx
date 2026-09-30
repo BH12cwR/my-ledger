@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
 import { useAdminSession } from "@/components/providers/admin-session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,18 +83,16 @@ export default function AdminAdminsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-lg font-semibold">管理员账号</h1>
-          <p className="text-xs text-muted-foreground">
-            后台账户体系与普通用户完全隔离，密码使用 PBKDF2-SHA256 存储
-          </p>
-        </div>
-        <Button size="sm" disabled={!isSuperAdmin} onClick={() => setOpen(true)}>
-          <Plus />
-          新建管理员
-        </Button>
-      </header>
+      <PageHeader
+        title="管理员账号"
+        subtitle="后台账户体系与普通用户完全隔离，密码使用 PBKDF2-SHA256 存储"
+        actions={
+          <Button size="sm" disabled={!isSuperAdmin} onClick={() => setOpen(true)}>
+            <Plus />
+            新建管理员
+          </Button>
+        }
+      />
 
       {!isSuperAdmin ? (
         <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
@@ -130,21 +129,21 @@ export default function AdminAdminsPage() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {item.status === "active" ? (
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" size="sm">
                             正常
                           </Badge>
                         ) : (
-                          <Badge variant="destructive" className="text-[10px]">
+                          <Badge variant="destructive" size="sm">
                             已停用
                           </Badge>
                         )}
                         {item.mustChangePassword ? (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" size="sm">
                             待改密码
                           </Badge>
                         ) : null}
                         {item.lockedUntil && item.lockedUntil > Date.now() ? (
-                          <Badge variant="destructive" className="text-[10px]">
+                          <Badge variant="destructive" size="sm">
                             已锁定
                           </Badge>
                         ) : null}

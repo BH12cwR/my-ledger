@@ -10,6 +10,8 @@ import { CalendarSheet } from "@/components/date/date-sheet";
 import { NumberKeypad } from "@/components/keyboard/number-keypad";
 import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   api,
   errorMessage,
@@ -26,11 +28,15 @@ import { cn } from "@/lib/utils";
 /** 记账页的三种记录类型，与 transactions.kind 一一对应 */
 type EditorKind = "expense" | "income" | "transfer";
 
-const KIND_OPTIONS: Array<{ value: EditorKind; label: string; activeClass: string }> = [
-  { value: "expense", label: "支出", activeClass: "bg-rose-500 text-white" },
-  { value: "income", label: "收入", activeClass: "bg-emerald-500 text-white" },
-  { value: "transfer", label: "转账", activeClass: "bg-blue-500 text-white" },
-];
+const KIND_OPTIONS = [
+  { value: "expense", label: "支出", activeClass: "bg-tone-expense text-white" },
+  { value: "income", label: "收入", activeClass: "bg-tone-income text-white" },
+  { value: "transfer", label: "转账", activeClass: "bg-tone-transfer text-white" },
+] as const satisfies ReadonlyArray<{
+  value: EditorKind;
+  label: string;
+  activeClass: string;
+}>;
 
 const ACCOUNTS_PATH = "/api/stats/accounts?includeArchived=true";
 
@@ -73,6 +79,9 @@ function pushOperator(expression: string, operator: "+" | "-"): string {
  * 与账单页同一套交互语言：数字键盘直接改「表达式」，保存时整体求值。
  * 通过 `?id=` 区分新增与编辑（同一个界面，避免两套 UI 漂移）。
  * 金额与转账的不变式前端只做提示，服务端仍会独立校验一次。
+ *
+ * 顶栏是「X + 类型分段」这种全屏模态结构，不在 `PageHeader` 的两种形态里，
+ * 因此按 §2.7 的例外条款自带 `sr-only` 的 h1。
  */
 export default function TransactionEditorPage() {
   const router = useRouter();
@@ -260,35 +269,27 @@ export default function TransactionEditorPage() {
 
   const isTransfer = kind === "transfer";
   const amountTone = isTransfer
-    ? "text-blue-600 dark:text-blue-400"
+    ? "text-tone-transfer-text"
     : kind === "income"
-      ? "text-emerald-600 dark:text-emerald-400"
-      : "text-rose-600 dark:text-rose-400";
+      ? "text-tone-income-text"
+      : "text-tone-expense-text";
   const dayText = relativeDayLabel(happenedOn) ?? happenedOn;
 
   return (
-    <div className="flex flex-col gap-4 pb-[calc(15.5rem+env(safe-area-inset-bottom))]">
+    <div className="flex flex-col gap-4 pb-[calc(var(--pb-keypad)+env(safe-area-inset-bottom))]">
+      <h1 className="sr-only">{transactionId ? "编辑账目" : "记一笔"}</h1>
+
       <header className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" aria-label="关闭" onClick={() => router.push("/")}>
           <X />
         </Button>
-        <div className="flex flex-1 gap-1 rounded-xl bg-muted/60 p-1">
-          {KIND_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => handleKindChange(option.value)}
-              className={cn(
-                "flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors",
-                kind === option.value
-                  ? option.activeClass
-                  : "text-muted-foreground hover:bg-background/60",
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          items={KIND_OPTIONS}
+          value={kind}
+          onChange={handleKindChange}
+          className="flex-1"
+          label="账目类型"
+        />
       </header>
 
       {isTransfer ? (
@@ -313,7 +314,7 @@ export default function TransactionEditorPage() {
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-xs transition-colors",
                   active
-                    ? "bg-blue-500/10 text-blue-600 ring-1 ring-blue-500/40 dark:text-blue-400"
+                    ? "bg-brand/10 text-brand-text ring-1 ring-brand/40"
                     : "hover:bg-muted/60",
                 )}
               >
@@ -333,7 +334,7 @@ export default function TransactionEditorPage() {
       <div className="flex flex-wrap items-center gap-2">
         {isTransfer ? null : (
           <Chip icon={<Wallet className="size-3.5" />} onClick={() => setSheet("from")}>
-            {fromAccount?.name ?? "扣款账户"}
+            <span className="max-w-32 truncate">{fromAccount?.name ?? "扣款账户"}</span>
           </Chip>
         )}
         <Chip icon={<CalendarDays className="size-3.5" />} onClick={() => setDateOpen(true)}>
@@ -347,9 +348,9 @@ export default function TransactionEditorPage() {
           maxLength={200}
           placeholder="点此输入备注…"
           onChange={(event) => setNote(event.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground md:text-sm"
         />
-        <span className={cn("shrink-0 font-mono text-2xl tabular-nums", amountTone)}>
+        <span className={cn("shrink-0 font-mono text-2xl font-semibold tabular-nums", amountTone)}>
           {expression === "" ? "0.00" : expression}
         </span>
       </div>
@@ -360,9 +361,10 @@ export default function TransactionEditorPage() {
           {(tags.data?.items ?? []).map((tag) => {
             const active = selectedTagIds.includes(tag.id);
             return (
-              <button
+              <Chip
                 key={tag.id}
-                type="button"
+                size="sm"
+                active={active}
                 onClick={() =>
                   setSelectedTagIds((current) =>
                     current.includes(tag.id)
@@ -370,21 +372,19 @@ export default function TransactionEditorPage() {
                       : [...current, tag.id],
                   )
                 }
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  active
-                    ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                    : "border-border text-muted-foreground hover:bg-muted/60",
-                )}
+                icon={
+                  <>
+                    {active ? <Check className="size-3" /> : null}
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ backgroundColor: tag.color }}
+                      aria-hidden
+                    />
+                  </>
+                }
               >
-                {active ? <Check className="size-3" /> : null}
-                <span
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: tag.color }}
-                  aria-hidden
-                />
                 {tag.name}
-              </button>
+              </Chip>
             );
           })}
         </div>
@@ -447,33 +447,11 @@ function AccountPanel({
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] text-muted-foreground">{label}</span>
+        <span className="block text-[10px] text-muted-foreground">{label}</span>
         <span className="block truncate text-sm font-medium">
           {account?.name ?? `选择${label}账户`}
         </span>
       </span>
-    </button>
-  );
-}
-
-/** 记账页的轻量胶囊按钮（账户 / 日期） */
-function Chip({
-  icon,
-  onClick,
-  children,
-}: {
-  icon: React.ReactNode;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60"
-    >
-      {icon}
-      <span className="max-w-32 truncate">{children}</span>
     </button>
   );
 }

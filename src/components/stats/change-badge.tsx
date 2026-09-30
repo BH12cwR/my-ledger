@@ -23,7 +23,7 @@ export function ChangeBadge({
 
   const diff = currentCents - previousCents;
   if (diff === 0) {
-    return <span className={cn("text-[11px] text-muted-foreground", className)}>持平</span>;
+    return <span className={cn("text-[10px] text-muted-foreground", className)}>持平</span>;
   }
 
   const up = diff > 0;
@@ -32,8 +32,8 @@ export function ChangeBadge({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums",
-        up ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400",
+        "inline-flex shrink-0 items-center gap-0.5 text-[10px] tabular-nums",
+        up ? "text-tone-expense-text" : "text-tone-income-text",
         className,
       )}
     >

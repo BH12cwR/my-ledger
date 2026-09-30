@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ErrorBlock, EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/layout/pagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,12 +70,10 @@ export default function AdminTransactionsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-heading text-lg font-semibold">账目监控</h1>
-        <p className="text-xs text-muted-foreground">
-          跨用户只读视图 · 服务端按 happened_on 过滤，今日 {today}
-        </p>
-      </header>
+      <PageHeader
+        title="账目监控"
+        subtitle={`跨用户只读视图 · 服务端按 happened_on 过滤，今日 ${today}`}
+      />
 
       <Card>
         <CardContent className="flex flex-col gap-3">
@@ -202,7 +201,7 @@ export default function AdminTransactionsPage() {
                             </span>
                           ) : null}
                           {item.tags.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-[10px]">
+                            <Badge key={tag} variant="secondary" size="sm">
                               {tag}
                             </Badge>
                           ))}

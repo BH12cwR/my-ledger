@@ -4,12 +4,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * 样式 token 入口。
+ *
+ * 约定（期 7 样式规范收口，见 docs/interaction-plan.md §2.7）：
+ *  - `brand` 负责「主操作 / 选中态」；`tone-*` 负责「账目类型标识」。两者现在是同一个蓝，
+ *    但语义独立 —— 改品牌色不该连带改掉「转账」的类型色。
+ *  - `tone-*` 只有实底与文字两档；浅底一律用透明度修饰符（`bg-tone-expense/10`）。
+ *  - `chart-1..5` 已删除：全项目图表颜色都来自 ChartConfig 或分类色，这几个灰阶从未被引用。
+ *  - `font-heading` 已删除：它原本就等于 `font-sans`，是空操作。
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -18,11 +27,6 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -39,6 +43,15 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-text: var(--brand-text);
+  --color-tone-expense: var(--tone-expense);
+  --color-tone-income: var(--tone-income);
+  --color-tone-transfer: var(--tone-transfer);
+  --color-tone-expense-text: var(--tone-expense-text);
+  --color-tone-income-text: var(--tone-income-text);
+  --color-tone-transfer-text: var(--tone-transfer-text);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -55,23 +68,16 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -81,6 +87,30 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* 品牌色 = 主色：主按钮、FAB、导航激活、选中态、Hero 渐变 */
+  --brand: #3b82f6;
+  --brand-strong: #2563eb;
+  --brand-text: #2563eb;
+  --primary: var(--brand-strong);
+  --primary-foreground: #ffffff;
+
+  /* 语义三色：账目类型标识。浅底用透明度修饰符，不另设 token */
+  --tone-expense: #f43f5e;
+  --tone-income: #10b981;
+  --tone-transfer: #3b82f6;
+  --tone-expense-text: #e11d48;
+  --tone-income-text: #059669;
+  --tone-transfer-text: #2563eb;
+
+  /*
+   * 壳与吸底元素的共用尺寸。二级页的吸底操作条、数字键盘、抽屉壳都必须引用这里，
+   * 否则改一次主内容宽度就要满仓库找 max-w-2xl。
+   */
+  --shell-max-w: 42rem;
+  --pb-nav: 7rem;
+  --pb-bottom-bar: 6rem;
+  --pb-keypad: 15.5rem;
 }
 
 .dark {
@@ -90,23 +120,16 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -115,6 +138,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* 主色是 blue-600，深浅两套下都是白字 */
+  --primary-foreground: #ffffff;
+  /* 深色底上文字色需要提亮一档（400 档），实底色保持不变 */
+  --brand-text: #60a5fa;
+  --tone-expense-text: #fb7185;
+  --tone-income-text: #34d399;
+  --tone-transfer-text: #60a5fa;
 }
 
 @layer base {

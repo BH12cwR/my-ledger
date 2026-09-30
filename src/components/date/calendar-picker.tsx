@@ -113,7 +113,7 @@ export function CalendarPicker({
                 onClick={() => setCursor(`${year}-${cursorMonth}`)}
                 className={cn(
                   "shrink-0 rounded-lg px-3 py-1.5 text-sm tabular-nums transition-colors",
-                  year === cursorYear ? "bg-blue-500 text-white" : "text-muted-foreground hover:bg-muted",
+                  year === cursorYear ? "bg-brand text-white" : "text-muted-foreground hover:bg-muted",
                 )}
               >
                 {year}年
@@ -134,7 +134,7 @@ export function CalendarPicker({
                   className={cn(
                     "rounded-lg border py-2 text-sm transition-colors",
                     key === cursor
-                      ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                      ? "border-brand bg-brand/10 text-brand-text"
                       : "border-border/60 hover:bg-muted/60",
                   )}
                 >
@@ -148,7 +148,7 @@ export function CalendarPicker({
 
       <div className="grid grid-cols-7 gap-1 text-center">
         {WEEKDAYS.map((label) => (
-          <span key={label} className="py-1 text-[11px] text-muted-foreground">
+          <span key={label} className="py-1 text-[10px] text-muted-foreground">
             {label}
           </span>
         ))}
@@ -163,9 +163,9 @@ export function CalendarPicker({
               className={cn(
                 "rounded-lg py-1.5 text-sm tabular-nums transition-colors",
                 day === value
-                  ? "bg-blue-500 text-white"
+                  ? "bg-brand text-white"
                   : day === today
-                    ? "text-blue-600 dark:text-blue-400"
+                    ? "text-brand-text"
                     : "hover:bg-muted",
               )}
             >
@@ -185,7 +185,7 @@ export function CalendarPicker({
               onClick={() => jumpTo(day)}
               className={cn(
                 "rounded-xl border border-border/60 py-2 text-xs transition-colors hover:bg-muted/60",
-                value === day && "border-blue-500 text-blue-600 dark:text-blue-400",
+                value === day && "border-brand text-brand-text",
               )}
             >
               {item.label}

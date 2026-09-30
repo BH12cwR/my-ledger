@@ -59,12 +59,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <span className="font-heading text-base font-semibold">账本 · 监控后台</span>
-              <Badge variant="secondary" className="text-[10px]">
+              <span className="text-base font-semibold">账本 · 监控后台</span>
+              <Badge variant="secondary" size="sm">
                 {ROLE_LABELS[admin.role] ?? admin.role}
               </Badge>
               {admin.mustChangePassword ? (
-                <Badge variant="destructive" className="text-[10px]">
+                <Badge variant="destructive" size="sm">
                   待修改初始密码
                 </Badge>
               ) : null}

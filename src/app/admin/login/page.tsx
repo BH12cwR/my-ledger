@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
         <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-foreground text-background">
           <ShieldCheck className="size-6" />
         </span>
-        <h1 className="font-heading text-xl font-semibold">监控后台</h1>
+        <h1 className="text-xl font-semibold">监控后台</h1>
         <p className="text-sm text-muted-foreground">平台级指标、用户与账目审计</p>
       </div>
 

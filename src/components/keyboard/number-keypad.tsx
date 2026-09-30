@@ -32,7 +32,7 @@ export function NumberKeypad({
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur-sm">
-      <div className="mx-auto grid w-full max-w-2xl grid-cols-4 gap-1.5 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto grid w-full max-w-[var(--shell-max-w)] grid-cols-4 gap-1.5 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {["1", "2", "3"].map((digit) => (
           <KeypadButton key={digit} onClick={() => onDigit(digit)}>
             {digit}
@@ -98,7 +98,7 @@ function KeypadButton({
         "disabled:opacity-50",
         variant === "default" && "bg-muted/60 active:bg-muted hover:bg-muted",
         variant === "muted" && "bg-transparent text-muted-foreground hover:bg-muted/60",
-        variant === "primary" && "bg-blue-500 font-medium text-white hover:bg-blue-600",
+        variant === "primary" && "bg-brand font-medium text-white hover:bg-brand-strong",
         className,
       )}
       {...props}

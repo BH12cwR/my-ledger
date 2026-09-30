@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ArrowUpDown, ChartColumn } from "lucide-react";
-import { ListSkeleton } from "@/components/layout/states";
+import { ListSkeleton, InlineEmpty, InlineError } from "@/components/layout/states";
 import { TransactionRow } from "@/components/transaction-row";
 import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import {
   api,
   buildQuery,
@@ -16,7 +17,6 @@ import {
   type TransactionSort,
 } from "@/lib/api";
 import { useApiQuery } from "@/lib/hooks";
-import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
@@ -145,22 +145,24 @@ export function BillListSheet({
           title={total === undefined ? "账单列表" : `账单列表 (${total})`}
           headerAction={
             <>
-              <SortPill
+              <Chip
+                size="sm"
                 active={mode === "time"}
-                ascending={mode === "time" && direction === "asc"}
                 onClick={() => pick("time")}
+                icon={<ArrowUpDown className="size-3.5" aria-hidden />}
               >
-                <ArrowUpDown className="size-3.5" aria-hidden />
                 时间
-              </SortPill>
-              <SortPill
+                {mode === "time" ? <SortArrow ascending={direction === "asc"} /> : null}
+              </Chip>
+              <Chip
+                size="sm"
                 active={mode === "amount"}
-                ascending={mode === "amount" && direction === "asc"}
                 onClick={() => pick("amount")}
+                icon={<ChartColumn className="size-3.5" aria-hidden />}
               >
-                <ChartColumn className="size-3.5" aria-hidden />
                 统计
-              </SortPill>
+                {mode === "amount" ? <SortArrow ascending={direction === "asc"} /> : null}
+              </Chip>
             </>
           }
         >
@@ -168,9 +170,9 @@ export function BillListSheet({
             {list.loading ? (
               <ListSkeleton rows={5} />
             ) : list.error ? (
-              <p className="py-6 text-center text-xs text-destructive">{list.error}</p>
+              <InlineError className="py-6">{list.error}</InlineError>
             ) : items.length === 0 ? (
-              <p className="py-6 text-center text-xs text-muted-foreground">该分类下还没有记录</p>
+              <InlineEmpty className="py-6">该分类下还没有记录</InlineEmpty>
             ) : (
               <>
                 {/* 不做日期分组：按金额排序时分组会把结果重新按天切碎（分组键是「天」），
@@ -190,9 +192,7 @@ export function BillListSheet({
                     {loadingMore ? "加载中…" : "加载更多"}
                   </Button>
                 ) : null}
-                {moreError ? (
-                  <p className="text-center text-xs text-destructive">{moreError}</p>
-                ) : null}
+                {moreError ? <InlineError>{moreError}</InlineError> : null}
               </>
             )}
           </div>
@@ -214,36 +214,11 @@ export function BillListSheet({
   );
 }
 
-/** 抽屉头部的排序胶囊：选中态实底色，再点一次翻转方向 */
-function SortPill({
-  active,
-  ascending,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  ascending: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+/** 排序方向的后缀箭头：只挂在选中的那枚胶囊上，再点一次翻转方向 */
+function SortArrow({ ascending }: { ascending: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-colors",
-        active
-          ? "bg-blue-500 text-white"
-          : "border border-border/60 text-muted-foreground hover:bg-muted/60",
-      )}
-    >
-      {children}
-      {active ? (
-        <span className="text-[10px] opacity-80" aria-hidden>
-          {ascending ? "↑" : "↓"}
-        </span>
-      ) : null}
-    </button>
+    <span className="text-[10px] opacity-80" aria-hidden>
+      {ascending ? "↑" : "↓"}
+    </span>
   );
 }

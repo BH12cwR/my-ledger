@@ -5,11 +5,14 @@ import { money, dayLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { TransactionDto } from "@/lib/api";
 
-/** 行首小圆点的类型色，与金额同色系（500 档在小圆点尺寸下更可见） */
+/**
+ * 行首小圆点的类型色。取 token 而不是写死 HEX —— 这是「账目类型色」的唯一来源，
+ * 图表、分段控件、详情页配色都引用同一组变量（见 globals.css 的 tone-*）。
+ */
 const DOT_COLORS = {
-  expense: "#f43f5e",
-  income: "#10b981",
-  transfer: "#3b82f6",
+  expense: "var(--tone-expense)",
+  income: "var(--tone-income)",
+  transfer: "var(--tone-transfer)",
 } as const;
 
 /**
@@ -71,10 +74,10 @@ export function TransactionRow({
   const hiddenTagCount = transaction.tags.length - visibleTags.length;
   const refunded = !isIncome && transaction.refundedAt !== null;
   const amountTone = isTransfer
-    ? "text-blue-600 dark:text-blue-400"
+    ? "text-tone-transfer-text"
     : isIncome
-      ? "text-emerald-600 dark:text-emerald-400"
-      : "text-rose-600 dark:text-rose-400";
+      ? "text-tone-income-text"
+      : "text-tone-expense-text";
 
   return (
     <button
@@ -87,7 +90,7 @@ export function TransactionRow({
       )}
     >
       <span
-        className="size-2 shrink-0 rounded-full"
+        className="size-2.5 shrink-0 rounded-full"
         style={{ backgroundColor: DOT_COLORS[transaction.kind] }}
         aria-hidden
       />
@@ -96,7 +99,7 @@ export function TransactionRow({
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 truncate text-sm font-medium">{title}</span>
           {visibleTags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
+            <Badge key={tag} variant="secondary" size="sm" className="shrink-0">
               {tag}
             </Badge>
           ))}
@@ -104,12 +107,12 @@ export function TransactionRow({
             <span className="shrink-0 text-[10px] text-muted-foreground">+{hiddenTagCount}</span>
           ) : null}
           {transaction.refundOfId ? (
-            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+            <Badge variant="outline" size="sm" className="shrink-0">
               退款
             </Badge>
           ) : null}
           {refunded ? (
-            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+            <Badge variant="outline" size="sm" className="shrink-0">
               已退款
             </Badge>
           ) : null}
@@ -127,9 +130,9 @@ export function TransactionRow({
           {money(transaction.amountCents)}
         </p>
         {groupBy === "none" ? (
-          <p className="text-[11px] text-muted-foreground">{transaction.happenedOn.slice(5)}</p>
+          <p className="text-xs text-muted-foreground">{transaction.happenedOn.slice(5)}</p>
         ) : showAccount && transaction.accountName && !isTransfer ? (
-          <p className="text-[11px] text-muted-foreground">{transaction.accountName}</p>
+          <p className="text-xs text-muted-foreground">{transaction.accountName}</p>
         ) : null}
       </div>
     </button>

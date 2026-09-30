@@ -24,12 +24,12 @@ export function WeeklyBars({ points }: { points: TrendPoint[] }) {
             </span>
             <div className="flex h-28 w-full items-end justify-center">
               <div
-                className="w-3.5 rounded-t-md bg-rose-500/85"
+                className="w-3.5 rounded-t-md bg-tone-expense/85"
                 style={{ height: `${height}%` }}
                 aria-hidden
               />
             </div>
-            <span className="text-[11px] text-muted-foreground">{weekdayLabel(point.day)}</span>
+            <span className="text-[10px] text-muted-foreground">{weekdayLabel(point.day)}</span>
           </div>
         );
       })}

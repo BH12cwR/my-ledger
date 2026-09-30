@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { CategoryBadge } from "@/components/category-icon";
 import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
+import { HeroCard } from "@/components/ui/hero-card";
 import type { AccountBalanceItem } from "@/lib/api";
 import { money } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
@@ -26,6 +27,8 @@ const GROUP_ORDER = [
  * 余额由服务端聚合（初始余额 + 收支净额 + 转账双向），前端只负责合计与按类型分组，空组不渲染。
  * 点账户进入 `/assets/[id]` 看该账户的收支与流水；账户的增删改仍留在「我的 → 账户」，
  * 两处职责分开，避免同一套管理逻辑维护两遍。
+ *
+ * 这是 Tab 根页、首屏就是数据卡，因此标题只做无障碍用途（`sr-only`），不加一行占位标题。
  */
 export default function AssetsPage() {
   const query = useApiQuery<{ items: AccountBalanceItem[] }>(ACCOUNTS_PATH);
@@ -37,21 +40,19 @@ export default function AssetsPage() {
     items: items.filter((item) => item.type === group.type),
   })).filter((group) => group.items.length > 0);
 
-  if (query.loading) return <ListSkeleton rows={5} />;
+  if (query.loading) return <ListSkeleton rows={5} variant="avatars" />;
 
   if (query.error) {
     return <ErrorBlock title="资产加载失败" description={query.error} onRetry={query.reload} />;
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-5 text-white shadow-sm">
-        <p className="text-xs text-white/80">总资产</p>
-        <p className="mt-3 text-center font-mono text-3xl font-semibold tabular-nums tracking-tight">
-          {money(totalCents)}
-        </p>
-        <p className="mt-2 text-center text-xs text-white/85">{items.length} 个账户</p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <h1 className="sr-only">资产</h1>
+
+      <HeroCard label="总资产" value={money(totalCents)}>
+        <p className="mt-3">{items.length} 个账户</p>
+      </HeroCard>
 
       {groups.length === 0 ? (
         <EmptyBlock title="还没有账户" description="先在「我的 → 账户」里添加一个账户" />

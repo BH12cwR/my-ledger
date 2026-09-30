@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ErrorBlock, EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/layout/pagination";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,12 +60,10 @@ export default function AdminAuditLogsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header>
-        <h1 className="font-heading text-lg font-semibold">审计日志</h1>
-        <p className="text-xs text-muted-foreground">
-          记录管理端敏感操作与登录事件，日志写入失败不影响主流程
-        </p>
-      </header>
+      <PageHeader
+        title="审计日志"
+        subtitle="记录管理端敏感操作与登录事件，日志写入失败不影响主流程"
+      />
 
       <Card>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -135,7 +134,7 @@ export default function AdminAuditLogsPage() {
                         {dateTime(log.createdAt)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" size="sm">
                           {ACTOR_LABELS[log.actorType] ?? log.actorType}
                         </Badge>
                       </TableCell>
@@ -144,7 +143,7 @@ export default function AdminAuditLogsPage() {
                         {log.targetType ? `${log.targetType}:${log.targetId ?? "-"}` : "-"}
                       </TableCell>
                       <TableCell className="hidden max-w-[280px] lg:table-cell">
-                        <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                        <span className="block truncate font-mono text-xs text-muted-foreground">
                           {log.detail ? JSON.stringify(log.detail) : "-"}
                         </span>
                       </TableCell>

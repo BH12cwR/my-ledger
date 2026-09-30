@@ -2,10 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { CategoryBadge } from "@/components/category-icon";
-import { EmptyBlock, ErrorBlock, LoadingBlock, ListSkeleton } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
+import {
+  EmptyBlock,
+  ErrorBlock,
+  InlineEmpty,
+  InlineError,
+  LoadingBlock,
+  ListSkeleton,
+} from "@/components/layout/states";
 import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
 import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
@@ -17,6 +25,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { METRIC_GRID_CLASS, MetricCell } from "@/components/ui/metric-cell";
 import {
   api,
   buildQuery,
@@ -202,36 +211,41 @@ export default function CategoryDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label="返回" onClick={() => router.push("/stats")}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-semibold">
-          分类-{category.name}
-        </h1>
-        <Button variant="ghost" size="icon-sm" aria-label="上一年" onClick={() => setYear(year - 1)}>
-          <ChevronLeft />
-        </Button>
-        <span className="text-sm tabular-nums">{year}年</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="下一年"
-          onClick={() => setYear(year + 1)}
-          disabled={year >= currentYear}
-        >
-          <ChevronRight />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="筛选"
-          onClick={() => setFilterOpen(true)}
-          className={cn(tagId && "text-blue-600 dark:text-blue-400")}
-        >
-          <SlidersHorizontal />
-        </Button>
-      </header>
+      <PageHeader
+        title={`分类-${category.name}`}
+        onBack={() => router.push("/stats")}
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="上一年"
+              onClick={() => setYear(year - 1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <span className="text-sm tabular-nums">{year}年</span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="下一年"
+              onClick={() => setYear(year + 1)}
+              disabled={year >= currentYear}
+            >
+              <ChevronRight />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="筛选"
+              onClick={() => setFilterOpen(true)}
+              className={cn(tagId && "text-brand-text")}
+            >
+              <SlidersHorizontal />
+            </Button>
+          </>
+        }
+      />
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {["year", ...monthTabs].map((tab) => {
@@ -244,7 +258,7 @@ export default function CategoryDetailPage() {
               className={cn(
                 "shrink-0 rounded-full px-3 py-1 text-xs transition-colors",
                 active
-                  ? "bg-blue-500 text-white"
+                  ? "bg-brand text-white"
                   : "border border-border/60 text-muted-foreground hover:bg-muted/60",
               )}
             >
@@ -260,12 +274,27 @@ export default function CategoryDetailPage() {
         <ErrorBlock title="指标加载失败" description={detail.error} onRetry={detail.reload} />
       ) : (
         <Card>
-          <CardContent className="grid grid-cols-2 gap-3 text-sm">
-            <Metric label={`总${kindLabel}`} value={money(detail.data?.totalCents ?? 0)} tone={kind} />
-            <Metric label="总笔数" value={`${detail.data?.transactionCount ?? 0}`} />
-            <Metric label="平均每笔" value={money(detail.data?.averagePerTransactionCents ?? 0)} />
-            <Metric label="平均每月" value={money(detail.data?.averagePerMonthCents ?? 0)} />
-            <Metric label="退款" value={money(detail.data?.refundCents ?? 0)} tone="income" />
+          <CardContent className={METRIC_GRID_CLASS}>
+            <MetricCell
+              label={`总${kindLabel}`}
+              value={money(detail.data?.totalCents ?? 0)}
+              tone={kind}
+            />
+            <MetricCell label="总笔数" value={`${detail.data?.transactionCount ?? 0}`} />
+            <MetricCell
+              label="平均每笔"
+              value={money(detail.data?.averagePerTransactionCents ?? 0)}
+            />
+            <MetricCell
+              label="平均每月"
+              value={money(detail.data?.averagePerMonthCents ?? 0)}
+            />
+            <MetricCell
+              label="退款"
+              value={money(detail.data?.refundCents ?? 0)}
+              tone="income"
+              className="col-span-2"
+            />
           </CardContent>
         </Card>
       )}
@@ -278,7 +307,7 @@ export default function CategoryDetailPage() {
           {trend.loading ? (
             <ListSkeleton rows={2} />
           ) : trend.error ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">{trend.error}</p>
+            <InlineEmpty className="py-6">{trend.error}</InlineEmpty>
           ) : (
             <ChartContainer
               config={{ expenseCents: { label: kindLabel, color: category.color } } satisfies ChartConfig}
@@ -314,7 +343,7 @@ export default function CategoryDetailPage() {
                       const cents = Number(entry.value);
                       return cents > 0 ? money(cents, "") : "";
                     }}
-                    className="fill-muted-foreground text-[9px]"
+                    className="fill-muted-foreground text-[10px]"
                   />
                 </Bar>
               </BarChart>
@@ -354,9 +383,7 @@ export default function CategoryDetailPage() {
                 {loadingMore ? "加载中…" : "加载更多"}
               </Button>
             ) : null}
-            {moreError ? (
-              <p className="text-center text-xs text-destructive">{moreError}</p>
-            ) : null}
+            {moreError ? <InlineError>{moreError}</InlineError> : null}
           </>
         )}
       </section>
@@ -428,7 +455,7 @@ function TagOption({
       onClick={onClick}
       className={cn(
         "flex items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/60",
-        active && "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+        active && "bg-brand/10 text-brand-text",
       )}
     >
       {color ? (
@@ -440,30 +467,5 @@ function TagOption({
       ) : null}
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "income" | "expense";
-}) {
-  return (
-    <div className="rounded-lg bg-muted/60 px-3 py-2">
-      <p className="truncate text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "font-mono tabular-nums",
-          tone === "income" && "text-emerald-600 dark:text-emerald-400",
-          tone === "expense" && "text-rose-600 dark:text-rose-400",
-        )}
-      >
-        {value}
-      </p>
-    </div>
   );
 }

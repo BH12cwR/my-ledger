@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChartColumn, ChevronDown, Plus, Search, UserRound } from "lucide-react";
 import { MonthSheet } from "@/components/date/date-sheet";
-import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyBlock, ErrorBlock, InlineError, ListSkeleton } from "@/components/layout/states";
 import { WeeklyBars } from "@/components/stats/weekly-bars";
 import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
@@ -154,43 +155,46 @@ export default function BillPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setSheetOpen(true)}
-          className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-lg font-medium transition-colors hover:bg-muted/60"
-        >
-          {headerLabel}
-          <ChevronDown className="size-4 text-muted-foreground" />
-        </button>
-
-        <div className="flex items-center gap-1">
-          <Button asChild variant="ghost" size="icon-sm">
-            <Link href="/search" aria-label="搜索账单">
-              <Search />
-            </Link>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="选择日期"
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title={
+          <button
+            type="button"
             onClick={() => setSheetOpen(true)}
+            className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1 transition-colors hover:bg-muted/60"
           >
-            <CalendarDays />
-          </Button>
-          <Button asChild variant="ghost" size="icon-sm">
-            <Link href="/stats" aria-label="统计">
-              <ChartColumn />
-            </Link>
-          </Button>
-          <Button asChild variant="ghost" size="icon-sm">
-            <Link href="/settings" aria-label="我的">
-              <UserRound />
-            </Link>
-          </Button>
-        </div>
-      </header>
+            {headerLabel}
+            <ChevronDown className="size-4 text-muted-foreground" />
+          </button>
+        }
+        actions={
+          <>
+            <Button asChild variant="ghost" size="icon-sm">
+              <Link href="/search" aria-label="搜索账单">
+                <Search />
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="选择日期"
+              onClick={() => setSheetOpen(true)}
+            >
+              <CalendarDays />
+            </Button>
+            <Button asChild variant="ghost" size="icon-sm">
+              <Link href="/stats" aria-label="统计">
+                <ChartColumn />
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="icon-sm">
+              <Link href="/settings" aria-label="我的">
+                <UserRound />
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       {summary.error ? (
         <ErrorBlock
@@ -245,9 +249,7 @@ export default function BillPage() {
                 {loadingMore ? "加载中…" : "加载更多"}
               </Button>
             ) : null}
-            {moreError ? (
-              <p className="text-center text-xs text-destructive">{moreError}</p>
-            ) : null}
+            {moreError ? <InlineError>{moreError}</InlineError> : null}
           </>
         )}
       </section>

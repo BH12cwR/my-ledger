@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { CategoryBadge } from "@/components/category-icon";
+import { PageHeader } from "@/components/layout/page-header";
 import { EmptyBlock, ErrorBlock, ListSkeleton } from "@/components/layout/states";
 import { TransactionDetailSheet } from "@/components/transaction/detail-sheet";
 import { GroupedList } from "@/components/transaction/grouped-list";
-import { SummaryCell } from "@/components/transaction/summary-cell";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { HeroCard } from "@/components/ui/hero-card";
+import { METRIC_GRID_CLASS, MetricCell } from "@/components/ui/metric-cell";
 import {
   api,
   buildQuery,
@@ -102,17 +103,14 @@ export default function AccountDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label="返回资产" onClick={() => router.push("/assets")}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="min-w-0 truncate font-heading text-lg font-semibold">
-          {account?.name ?? "账户明细"}
-        </h1>
-      </header>
+      <PageHeader
+        title={account?.name ?? "账户明细"}
+        onBack={() => router.push("/assets")}
+        backLabel="返回资产"
+      />
 
       {accounts.loading ? (
-        <ListSkeleton rows={3} />
+        <ListSkeleton rows={3} variant="avatars" />
       ) : accounts.error ? (
         <ErrorBlock title="账户加载失败" description={accounts.error} onRetry={accounts.reload} />
       ) : !account ? (
@@ -127,26 +125,31 @@ export default function AccountDetailPage() {
         />
       ) : (
         <>
-          <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-5 text-white shadow-sm">
-            <div className="flex items-center gap-2">
-              <CategoryBadge icon={account.icon} />
-              <span className="text-xs text-white/85">{accountTypeLabel(account.type)}</span>
-            </div>
-            <p className="mt-3 text-center font-mono text-3xl font-semibold tabular-nums tracking-tight">
-              {money(account.balanceCents)}
-            </p>
-            <p className="mt-2 text-center text-xs text-white/85">共 {account.transactionCount} 笔</p>
-          </div>
+          <HeroCard
+            top={
+              <div className="flex items-center gap-2">
+                <CategoryBadge icon={account.icon} />
+                <span className="text-xs text-white/85">{accountTypeLabel(account.type)}</span>
+              </div>
+            }
+            value={money(account.balanceCents)}
+          >
+            <p className="mt-3">共 {account.transactionCount} 笔</p>
+          </HeroCard>
 
           <Card>
             <CardHeader>
               <CardTitle>累计汇总</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-sm">
-              <SummaryCell label="支出" cents={summary.data?.expenseCents} tone="expense" />
-              <SummaryCell label="收入" cents={summary.data?.incomeCents} tone="income" />
-              <SummaryCell label="结余" cents={summary.data?.netCents} />
-              <SummaryCell label="转账" cents={summary.data?.transferCents} tone="transfer" />
+            <CardContent className={METRIC_GRID_CLASS}>
+              <MetricCell
+                label="支出"
+                value={money(summary.data?.expenseCents)}
+                tone="expense"
+              />
+              <MetricCell label="收入" value={money(summary.data?.incomeCents)} tone="income" />
+              <MetricCell label="结余" value={money(summary.data?.netCents)} />
+              <MetricCell label="转账" value={money(summary.data?.transferCents)} tone="transfer" />
             </CardContent>
           </Card>
 

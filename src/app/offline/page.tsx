@@ -12,7 +12,7 @@ export const metadata: Metadata = {
  */
 export default function OfflinePage() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
       <p className="text-5xl" aria-hidden>
         📡
       </p>

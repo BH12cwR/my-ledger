@@ -39,13 +39,21 @@ export function AppShell({ children }: { children: ReactNode }) {
    * 设计稿里的二级页（搜索 / 筛选 / 统计 / 分类详情 / 账户明细 / 记账）都是全屏推入页，
    * 底部没有导航栏；只有账单页与资产页挂导航。二级页因此也不再为导航预留下边距 ——
    * 这也让「筛选页确定吸底」不会与导航重叠。
+   *
+   * 主内容区宽度与吸底留白都由 globals.css 的壳变量决定：筛选页的吸底「确定」、
+   * 记账页数字键盘、抽屉壳都引用同一组值，改一次宽度不用满仓库找 `max-w-2xl`。
    */
   const showNav = pathname === "/" || pathname === "/assets";
 
   return (
     <>
       <ServiceWorkerRegistrar />
-      <main className={cn("mx-auto w-full max-w-2xl px-4 pt-6", showNav ? "pb-28" : "pb-4")}>
+      <main
+        className={cn(
+          "mx-auto w-full max-w-[var(--shell-max-w)] px-4 pt-6",
+          showNav ? "pb-[var(--pb-nav)]" : "pb-4",
+        )}
+      >
         {children}
       </main>
       {showNav ? <BottomNav /> : null}

@@ -113,7 +113,7 @@ export default function LoginPage() {
         <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
           <ShieldCheck className="size-6" />
         </span>
-        <h1 className="font-heading text-xl font-semibold">账本</h1>
+        <h1 className="text-xl font-semibold">账本</h1>
         <p className="text-sm text-muted-foreground">
           记录每一笔收支，看清钱都去了哪里
         </p>
@@ -133,7 +133,7 @@ export default function LoginPage() {
           <CardContent className="flex flex-col gap-4">
             <TabsContent value="login">
               <form className="flex flex-col gap-3" onSubmit={handleLogin}>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="login-username">用户名</Label>
                   <Input
                     id="login-username"
@@ -147,7 +147,7 @@ export default function LoginPage() {
                     placeholder="请输入用户名"
                   />
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="login-password">密码</Label>
                   <Input
                     id="login-password"
@@ -179,7 +179,7 @@ export default function LoginPage() {
 
             <TabsContent value="register">
               <form className="flex flex-col gap-3" onSubmit={handleRegister}>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="register-username">用户名</Label>
                   <Input
                     id="register-username"
@@ -193,7 +193,7 @@ export default function LoginPage() {
                     placeholder="3-20 位字母、数字、下划线、点或中划线"
                   />
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="register-nickname">昵称（可选）</Label>
                   <Input
                     id="register-nickname"
@@ -206,7 +206,7 @@ export default function LoginPage() {
                     placeholder="不填则默认与用户名相同"
                   />
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="register-password">密码</Label>
                   <Input
                     id="register-password"
@@ -221,7 +221,7 @@ export default function LoginPage() {
                     placeholder="至少 8 位，且包含两类字符"
                   />
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="register-confirm">确认密码</Label>
                   <Input
                     id="register-confirm"
@@ -275,7 +275,7 @@ export default function LoginPage() {
             {capabilities.devLogin ? (
               <>
                 <Separator />
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="nickname">开发模式模拟登录</Label>
                   <div className="flex gap-2">
                     <Input

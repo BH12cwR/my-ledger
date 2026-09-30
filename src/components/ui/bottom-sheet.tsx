@@ -51,7 +51,7 @@ function BottomSheetContent({
         data-slot="bottom-sheet-content"
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[85dvh] w-full max-w-2xl flex-col rounded-t-2xl bg-popover text-popover-foreground ring-1 ring-foreground/10 outline-none",
+          "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[85dvh] w-full max-w-[var(--shell-max-w)] flex-col rounded-t-2xl bg-popover text-popover-foreground ring-1 ring-foreground/10 outline-none",
           "duration-200 data-open:animate-in data-open:slide-in-from-bottom data-closed:animate-out data-closed:slide-out-to-bottom",
           className,
         )}
@@ -62,7 +62,7 @@ function BottomSheetContent({
         </div>
 
         <div className="flex items-center gap-2 px-4 pb-2">
-          <DialogPrimitive.Title className="font-heading text-base font-medium">
+          <DialogPrimitive.Title className="text-base font-medium">
             {title}
           </DialogPrimitive.Title>
           {headerAction ? (

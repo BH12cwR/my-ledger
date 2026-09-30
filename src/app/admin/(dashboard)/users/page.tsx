@@ -5,6 +5,7 @@ import { Search, ShieldAlert, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { DetailRow } from "@/components/detail-row";
 import { ErrorBlock, EmptyBlock, LoadingBlock } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
 import { Pagination } from "@/components/layout/pagination";
 import { useAdminSession } from "@/components/providers/admin-session-provider";
 import { Badge } from "@/components/ui/badge";
@@ -95,14 +96,16 @@ export default function AdminUsersPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <h1 className="font-heading text-lg font-semibold">用户管理</h1>
-        {canManage ? null : (
-          <Badge variant="outline" className="text-[10px]">
-            当前角色仅可查看
-          </Badge>
-        )}
-      </header>
+      <PageHeader
+        title="用户管理"
+        actions={
+          canManage ? undefined : (
+            <Badge variant="outline" size="sm">
+              当前角色仅可查看
+            </Badge>
+          )
+        }
+      />
 
       <Card>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -175,18 +178,18 @@ export default function AdminUsersPage() {
                           onClick={() => setDetailId(user.id)}
                         >
                           <span className="font-medium">{user.nickname}</span>
-                          <span className="block font-mono text-[11px] text-muted-foreground">
+                          <span className="block font-mono text-xs text-muted-foreground">
                             {user.id.slice(0, 8)}…
                           </span>
                         </button>
                       </TableCell>
                       <TableCell>
                         {user.status === "active" ? (
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" size="sm">
                             正常
                           </Badge>
                         ) : (
-                          <Badge variant="destructive" className="text-[10px]">
+                          <Badge variant="destructive" size="sm">
                             已禁用
                           </Badge>
                         )}

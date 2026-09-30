@@ -14,7 +14,6 @@ import {
   type PieLabelRenderProps,
 } from "recharts";
 import {
-  ArrowLeft,
   CalendarDays,
   ChartColumn,
   ChevronLeft,
@@ -25,7 +24,8 @@ import {
 import { BillListSheet } from "@/components/stats/bill-list-sheet";
 import { CategoryRank } from "@/components/stats/category-rank";
 import { MonthSheet } from "@/components/date/date-sheet";
-import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
+import { ErrorBlock, InlineEmpty, LoadingBlock } from "@/components/layout/states";
 import { Button } from "@/components/ui/button";
 import { BottomSheet, BottomSheetContent } from "@/components/ui/bottom-sheet";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Label } from "@/components/ui/label";
+import { METRIC_GRID_CLASS, MetricCell } from "@/components/ui/metric-cell";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -62,9 +64,10 @@ import { useApiQuery } from "@/lib/hooks";
 import { useMonthStartDay } from "@/lib/month-start-day";
 import { cn } from "@/lib/utils";
 
+/** 图表配色统一走语义色 token，不再写死 HEX */
 const TREND_CONFIG = {
-  incomeCents: { label: "收入", color: "#10b981" },
-  expenseCents: { label: "支出", color: "#f43f5e" },
+  incomeCents: { label: "收入", color: "var(--tone-income)" },
+  expenseCents: { label: "支出", color: "var(--tone-expense)" },
 } satisfies ChartConfig;
 
 /** 环形图最多渲染几个环外标签，超出后靠下方排行榜看全量，避免标签互相压字 */
@@ -76,10 +79,14 @@ const GRANULARITIES = [
 ] as const;
 type Granularity = (typeof GRANULARITIES)[number]["value"];
 
+/**
+ * 口径分段：三段都用类型色实底（§2.4）。
+ * 「全部」沿用转账那一档蓝 —— 它是这组里的第三种类型色，不是「选中态」的蓝。
+ */
 const KINDS = [
-  { value: "expense", label: "支出", activeClass: "bg-rose-500 text-white" },
-  { value: "income", label: "收入", activeClass: "bg-emerald-500 text-white" },
-  { value: "all", label: "全部", activeClass: "bg-blue-500 text-white" },
+  { value: "expense", label: "支出", activeClass: "bg-tone-expense text-white" },
+  { value: "income", label: "收入", activeClass: "bg-tone-income text-white" },
+  { value: "all", label: "全部", activeClass: "bg-tone-transfer text-white" },
 ] as const;
 type StatsKind = (typeof KINDS)[number]["value"];
 
@@ -192,7 +199,7 @@ export default function StatsPage() {
   const kindLabel = kind === "income" ? "收入" : "支出";
   // 「日收支统计」的柱子跟随整页口径；「全部」下与环形图保持一致，固定看支出
   const trendKey = kind === "income" ? "incomeCents" : "expenseCents";
-  const trendColor = kind === "income" ? "#10b981" : "#f43f5e";
+  const trendColor = kind === "income" ? "var(--tone-income)" : "var(--tone-expense)";
   /** X 轴：按日时只给「日号」（跟设计稿的 1 / 5 / 9…），按月时给「YYYY年M月」 */
   const trendTick = (value: string) =>
     trendGranularity === "month" ? monthLabel(value) : String(Number(value.slice(8, 10)));
@@ -230,41 +237,31 @@ export default function StatsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label="返回" onClick={() => router.push("/")}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="font-heading text-lg font-semibold">统计</h1>
-
-        <div className="ml-auto flex items-center gap-1">
-          <div className="flex gap-1 rounded-xl bg-muted/60 p-1">
-            {GRANULARITIES.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setGranularity(item.value)}
-                className={cn(
-                  "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-                  granularity === item.value
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="筛选"
-            onClick={() => setFilterOpen(true)}
-            className={cn(filterCount > 0 && "text-blue-600 dark:text-blue-400")}
-          >
-            <SlidersHorizontal />
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="统计"
+        onBack={() => router.push("/")}
+        actions={
+          <>
+            <SegmentedControl
+              items={GRANULARITIES}
+              value={granularity}
+              onChange={setGranularity}
+              size="sm"
+              tone="neutral"
+              label="统计粒度"
+            />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="筛选"
+              onClick={() => setFilterOpen(true)}
+              className={cn(filterCount > 0 && "text-brand-text")}
+            >
+              <SlidersHorizontal />
+            </Button>
+          </>
+        }
+      />
 
       <div className="flex items-center justify-between gap-2">
         <Button variant="ghost" size="icon-sm" aria-label="上一期" onClick={() => step(-1)}>
@@ -289,14 +286,27 @@ export default function StatsPage() {
         <CardHeader>
           <CardTitle>收支总览</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
+        <CardContent className="flex flex-col items-center gap-3">
           {summaryCollapsed ? null : (
-            <div className="grid w-full grid-cols-2 gap-4">
-              <OverviewCell label="支出" value={money(summary.data?.expenseCents ?? 0)} />
-              <OverviewCell label="收入" value={money(summary.data?.incomeCents ?? 0)} />
-              <OverviewCell label="结余" value={money(summary.data?.netCents ?? 0)} />
-              <OverviewCell label="日均支出" value={money(summary.data?.dailyAverageCents ?? 0)} />
-              <OverviewCell
+            <div className={cn(METRIC_GRID_CLASS, "w-full")}>
+              <MetricCell
+                variant="plain"
+                label="支出"
+                value={money(summary.data?.expenseCents ?? 0)}
+              />
+              <MetricCell
+                variant="plain"
+                label="收入"
+                value={money(summary.data?.incomeCents ?? 0)}
+              />
+              <MetricCell variant="plain" label="结余" value={money(summary.data?.netCents ?? 0)} />
+              <MetricCell
+                variant="plain"
+                label="日均支出"
+                value={money(summary.data?.dailyAverageCents ?? 0)}
+              />
+              <MetricCell
+                variant="plain"
                 label="转账"
                 value={money(summary.data?.transferCents ?? 0)}
                 className="col-span-2"
@@ -332,11 +342,9 @@ export default function StatsPage() {
           {trend.loading ? (
             <LoadingBlock label="正在生成走势…" />
           ) : trend.error ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">{trend.error}</p>
+            <InlineEmpty className="py-6">{trend.error}</InlineEmpty>
           ) : !hasTrendData ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">
-              该区间内还没有收支记录
-            </p>
+            <InlineEmpty className="py-6">该区间内还没有收支记录</InlineEmpty>
           ) : (
             <ChartContainer config={TREND_CONFIG} className="aspect-auto h-52 w-full">
               <BarChart data={points} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
@@ -373,36 +381,25 @@ export default function StatsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-1 rounded-xl bg-muted/60 p-1">
-        {KINDS.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => setKind(item.value)}
-            className={cn(
-              "flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors",
-              kind === item.value
-                ? item.activeClass
-                : "text-muted-foreground hover:bg-background/60",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        items={KINDS}
+        value={kind}
+        onChange={setKind}
+        label="统计口径"
+      />
 
       <Card>
         <CardHeader>
           {/* 稿 10 的卡名就是「分类统计」，不随口径改名 —— 口径已由下方的分段表达 */}
           <CardTitle>分类统计</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-3">
           {breakdown.loading || ringQuery.loading ? (
             <LoadingBlock label="正在汇总…" />
           ) : ringItems.length === 0 ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">
+            <InlineEmpty className="py-6">
               该区间内没有{kind === "all" ? "支出" : kindLabel}记录
-            </p>
+            </InlineEmpty>
           ) : (
             <>
               <div className="relative mx-auto h-64 w-full max-w-xs">
@@ -471,23 +468,13 @@ export default function StatsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-center gap-1 rounded-xl bg-muted/60 p-1">
-                {KINDS.slice(0, 2).map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setKind(item.value)}
-                    className={cn(
-                      "flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors",
-                      (kind === "all" ? "expense" : kind) === item.value
-                        ? item.activeClass
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              {/* 与上方那条口径分段驱动同一个 state，因此规格必须一致（都走 md） */}
+              <SegmentedControl
+                items={KINDS.slice(0, 2)}
+                value={kind === "all" ? "expense" : kind}
+                onChange={setKind}
+                label="环形图口径"
+              />
             </>
           )}
         </CardContent>
@@ -501,9 +488,9 @@ export default function StatsPage() {
           {breakdown.loading ? (
             <LoadingBlock label="正在汇总…" />
           ) : (breakdown.data?.items ?? []).length === 0 ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">
+            <InlineEmpty className="py-6">
               该区间内没有{kind === "all" ? "" : kindLabel}记录
-            </p>
+            </InlineEmpty>
           ) : (
             <CategoryRank
               items={breakdown.data?.items ?? []}
@@ -551,7 +538,7 @@ export default function StatsPage() {
             </div>
           }
         >
-          <div className="flex flex-col gap-4 pt-1">
+          <div className="flex flex-col gap-3 pt-1">
             <div className="flex flex-col gap-1.5">
               <Label>统计维度</Label>
               <Select
@@ -654,23 +641,5 @@ function renderRingLabel(props: PieLabelRenderProps) {
     >
       {`${String(props.name ?? "")} ${(percent * 100).toFixed(2)}%`}
     </text>
-  );
-}
-
-/** 「收支总览」的一格：标签在上、数值在下，整格居中（跟设计稿） */
-function OverviewCell({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: string;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex flex-col items-center gap-1 text-center", className)}>
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="font-mono text-lg tabular-nums">{value}</span>
-    </div>
   );
 }

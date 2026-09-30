@@ -70,8 +70,8 @@ export function AccountSheet({
             type="button"
             onClick={() => pick(null)}
             className={cn(
-              "flex items-center justify-between rounded-xl px-2 py-3 text-left text-sm transition-colors hover:bg-muted/60",
-              value === null && "text-blue-600 dark:text-blue-400",
+              "flex items-center justify-between rounded-xl px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/60",
+              value === null && "text-brand-text",
             )}
           >
             <span>不选择账户</span>
@@ -79,7 +79,7 @@ export function AccountSheet({
           </button>
 
           {query.loading ? (
-            <ListSkeleton rows={3} />
+            <ListSkeleton rows={3} variant="avatars" />
           ) : grid ? (
             <div className="grid grid-cols-3 gap-2">
               {items.map((item) => (
@@ -89,12 +89,12 @@ export function AccountSheet({
                   onClick={() => pick(item.id)}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-xs transition-colors hover:bg-muted/60",
-                    value === item.id && "bg-blue-500/10",
+                    value === item.id && "bg-brand/10",
                   )}
                 >
                   <CategoryBadge icon={item.icon} />
                   <span className="w-full truncate text-center font-medium">{item.name}</span>
-                  <span className="w-full truncate text-center font-mono text-[11px] tabular-nums text-muted-foreground">
+                  <span className="w-full truncate text-center font-mono text-xs tabular-nums text-muted-foreground">
                     {money(item.balanceCents)}
                   </span>
                 </button>
@@ -109,7 +109,7 @@ export function AccountSheet({
                   onClick={() => pick(item.id)}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-muted/60",
-                    value === item.id && "bg-blue-500/10",
+                    value === item.id && "bg-brand/10",
                   )}
                 >
                   <CategoryBadge icon={item.icon} />

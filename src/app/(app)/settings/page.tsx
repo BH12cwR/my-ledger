@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { BudgetProgress, budgetPeriodLabel } from "@/components/budget-progress";
 import { CategoryIcon } from "@/components/category-icon";
 import { EmptyBlock, ListSkeleton } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
 import { useSession } from "@/components/providers/session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import {
 import { dateTime, money } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
 import { centsToInputValue, parseAmountToCents } from "@/lib/money";
+import { COLOR_PALETTE } from "@/lib/palette";
 import { cn } from "@/lib/utils";
 
 const ACCOUNT_TYPES = [
@@ -52,17 +54,6 @@ const ACCOUNT_TYPES = [
   { value: "credit", label: "信用卡" },
   { value: "other", label: "其他" },
 ] as const;
-
-const PALETTE = [
-  "#64748b",
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#10b981",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-];
 
 /** 「总预算」在下拉框中的哨兵值：Radix Select 不允许空字符串 value */
 const TOTAL_SCOPE = "__total__";
@@ -101,11 +92,11 @@ export default function SettingsPage() {
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [categoryKind, setCategoryKind] = useState<string>("expense");
-  const [categoryColor, setCategoryColor] = useState(PALETTE[5]);
+  const [categoryColor, setCategoryColor] = useState(COLOR_PALETTE[5]);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [tagDialog, setTagDialog] = useState(false);
   const [tagName, setTagName] = useState("");
-  const [tagColor, setTagColor] = useState(PALETTE[3]);
+  const [tagColor, setTagColor] = useState(COLOR_PALETTE[3]);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [budgetDialog, setBudgetDialog] = useState(false);
   const [budgetScope, setBudgetScope] = useState<string>(TOTAL_SCOPE);
@@ -211,7 +202,7 @@ export default function SettingsPage() {
     setEditingCategoryId(null);
     setCategoryName("");
     setCategoryKind("expense");
-    setCategoryColor(PALETTE[5]);
+    setCategoryColor(COLOR_PALETTE[5]);
     setCategoryDialog(true);
   }
 
@@ -252,7 +243,7 @@ export default function SettingsPage() {
   function openCreateTag() {
     setEditingTagId(null);
     setTagName("");
-    setTagColor(PALETTE[3]);
+    setTagColor(COLOR_PALETTE[3]);
     setTagDialog(true);
   }
 
@@ -337,7 +328,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-heading text-lg font-semibold">我的</h1>
+      <PageHeader title="我的" />
 
       <Card>
         <CardContent className="flex items-center gap-3">
@@ -354,7 +345,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2">
+      <div className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2.5">
         <div>
           <p className="text-sm">显示已归档</p>
           <p className="text-xs text-muted-foreground">归档项不再出现在记账表单中</p>
@@ -376,19 +367,19 @@ export default function SettingsPage() {
             新增账户
           </Button>
           {accounts.loading ? (
-            <ListSkeleton rows={4} />
+            <ListSkeleton rows={4} variant="cards" />
           ) : (
             <div className="flex flex-col gap-2">
               {(accounts.data?.items ?? []).map((account) => (
                 <div
                   key={account.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2"
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{account.name}</span>
                       {account.archived ? (
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" size="sm">
                           已归档
                         </Badge>
                       ) : null}
@@ -465,25 +456,25 @@ export default function SettingsPage() {
             新增分类
           </Button>
           {categories.loading ? (
-            <ListSkeleton rows={4} />
+            <ListSkeleton rows={4} variant="cards" />
           ) : (
             <div className="flex flex-col gap-2">
               {(categories.data?.items ?? []).map((category) => (
                 <div
                   key={category.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2"
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5"
                 >
                   <CategoryIcon name={category.icon} color={category.color} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{category.name}</span>
                       {category.system ? (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" size="sm">
                           内置
                         </Badge>
                       ) : null}
                       {category.archived ? (
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" size="sm">
                           已归档
                         </Badge>
                       ) : null}
@@ -552,7 +543,7 @@ export default function SettingsPage() {
           </Button>
 
           {tags.loading ? (
-            <ListSkeleton rows={3} />
+            <ListSkeleton rows={3} variant="cards" />
           ) : (tags.data?.items ?? []).length === 0 ? (
             <EmptyBlock title="还没有标签" description="标签用于给账目加维度，例如「出差」「报销」" />
           ) : (
@@ -560,7 +551,7 @@ export default function SettingsPage() {
               {(tags.data?.items ?? []).map((tag) => (
                 <div
                   key={tag.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2"
+                  className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5"
                 >
                   <span
                     className="size-2.5 rounded-full"
@@ -605,7 +596,7 @@ export default function SettingsPage() {
             设置预算
           </Button>
           {budgets.loading ? (
-            <ListSkeleton rows={3} />
+            <ListSkeleton rows={3} variant="cards" />
           ) : (budgets.data?.items ?? []).length === 0 ? (
             <EmptyBlock
               title="还没有预算"
@@ -626,7 +617,7 @@ export default function SettingsPage() {
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {budget.categoryName ?? "总预算"}
                     </span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" size="sm">
                       {budgetPeriodLabel(budget.period)}
                     </Badge>
                     <Button
@@ -661,7 +652,7 @@ export default function SettingsPage() {
                     </span>
                     <span
                       className={
-                        budget.remainingCents < 0 ? "text-rose-600 dark:text-rose-400" : ""
+                        budget.remainingCents < 0 ? "text-tone-expense-text" : ""
                       }
                     >
                       {budget.remainingCents < 0
@@ -886,7 +877,7 @@ function ColorPicker({
     <div className="flex flex-col gap-1.5">
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-1.5">
-        {PALETTE.map((color) => (
+        {COLOR_PALETTE.map((color) => (
           <button
             key={color}
             type="button"

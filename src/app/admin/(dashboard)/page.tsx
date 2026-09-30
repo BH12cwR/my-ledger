@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { ErrorBlock, LoadingBlock } from "@/components/layout/states";
+import { ErrorBlock, InlineEmpty, LoadingBlock } from "@/components/layout/states";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,8 +17,8 @@ import { axisDay, dateLabel, money } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
 
 const TREND_CONFIG = {
-  transactions: { label: "记账笔数", color: "#3b82f6" },
-  newUsers: { label: "新增用户", color: "#10b981" },
+  transactions: { label: "记账笔数", color: "var(--tone-transfer)" },
+  newUsers: { label: "新增用户", color: "var(--tone-income)" },
 } satisfies ChartConfig;
 
 const WINDOWS = [7, 14, 30] as const;
@@ -48,26 +49,24 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-lg font-semibold">平台概览</h1>
-          <p className="text-xs text-muted-foreground">
-            {data?.range.days} 天窗口 · 自 {dateLabel(data?.range.since)} 起
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {WINDOWS.map((value) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={value === days ? "default" : "outline"}
-              onClick={() => setDays(value)}
-            >
-              近 {value} 天
-            </Button>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        title="平台概览"
+        subtitle={`${data?.range.days} 天窗口 · 自 ${dateLabel(data?.range.since)} 起`}
+        actions={
+          <>
+            {WINDOWS.map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={value === days ? "default" : "outline"}
+                onClick={() => setDays(value)}
+              >
+                近 {value} 天
+              </Button>
+            ))}
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
@@ -122,9 +121,9 @@ export default function AdminOverviewPage() {
           {trend.loading ? (
             <LoadingBlock label="正在生成趋势…" />
           ) : trend.error ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">{trend.error}</p>
+            <InlineEmpty className="py-6">{trend.error}</InlineEmpty>
           ) : points.length === 0 ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">暂无数据</p>
+            <InlineEmpty className="py-6">暂无数据</InlineEmpty>
           ) : (
             <ChartContainer config={TREND_CONFIG} className="aspect-auto h-64 w-full">
               <BarChart data={points} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
@@ -169,7 +168,7 @@ function StatCard({ title, value, hint }: { title: string; value: string; hint: 
       <CardContent>
         <p className="text-xs text-muted-foreground">{title}</p>
         <p className="mt-1 font-mono text-xl font-semibold tabular-nums">{value}</p>
-        <p className="mt-1 truncate text-[11px] text-muted-foreground">{hint}</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
   );

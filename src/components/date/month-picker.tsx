@@ -73,7 +73,7 @@ export function MonthPicker({
                 className={cn(
                   "flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs transition-colors",
                   active
-                    ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                    ? "border-brand/40 bg-brand/10 text-brand-text"
                     : "border-border/60 text-muted-foreground hover:bg-muted/60",
                 )}
               >
@@ -121,7 +121,7 @@ export function MonthPicker({
                       onClick={() => onMonthStartDayChange(day)}
                       className={cn(
                         "rounded-lg py-1.5 font-mono text-xs tabular-nums transition-colors",
-                        day === monthStartDay ? "bg-blue-500 text-white" : "hover:bg-muted",
+                        day === monthStartDay ? "bg-brand text-white" : "hover:bg-muted",
                       )}
                     >
                       {day}
@@ -146,7 +146,7 @@ export function MonthPicker({
                   }}
                   className={cn(
                     "shrink-0 rounded-lg px-3 py-1.5 text-sm tabular-nums transition-colors",
-                    active ? "bg-blue-500 text-white" : "text-muted-foreground hover:bg-muted",
+                    active ? "bg-brand text-white" : "text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {year}年
@@ -167,12 +167,12 @@ export function MonthPicker({
                     className={cn(
                       "relative rounded-xl border py-2.5 text-sm transition-colors",
                       active
-                        ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                        ? "border-brand bg-brand/10 text-brand-text"
                         : "border-border/60 hover:bg-muted/60",
                     )}
                   >
                     {month}月
-                    {active ? <Check className="absolute top-1 right-1 size-3 text-blue-500" /> : null}
+                    {active ? <Check className="absolute top-1 right-1 size-3 text-brand" /> : null}
                   </button>
                 );
               })}
