@@ -2,11 +2,10 @@ import { defineConfig, type UserConfigExport } from '@tarojs/cli';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import devConfig from './dev';
 import prodConfig from './prod';
-import vitePluginImp from 'vite-plugin-imp';
 // https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
 export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
   const baseConfig: UserConfigExport<'webpack5'> = {
-    projectName: 'taro_template',
+    projectName: 'my-ledger',
     date: '2025-12-10',
     designWidth: 375,
     deviceRatio: {
@@ -37,9 +36,6 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       postcss: {
         pxtransform: {
           enable: true,
-          config: {
-            selectorBlackList: ['nut-'],
-          },
         },
         cssModules: {
           enable: true, // 开启 CSS Modules
@@ -88,14 +84,6 @@ export default defineConfig<'webpack5'>(async (merge, { command, mode }) => {
       },
       webpackChain(chain) {
         chain.resolve.plugin('tsconfig-paths').use(TsconfigPathsPlugin);
-      },
-    },
-    rn: {
-      appName: 'taroDemo',
-      postcss: {
-        cssModules: {
-          enable: true,
-        },
       },
     },
   };
