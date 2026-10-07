@@ -1,0 +1,119 @@
+@use '@/styles/variables.scss' as *;
+
+.bar {
+  display: flex;
+  align-items: center;
+  margin-top: $spacing-md;
+}
+
+.inputWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 $spacing-md;
+  height: $button-height-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-button;
+  box-shadow: $shadow-card;
+}
+
+.inputIcon {
+  margin-right: $spacing-sm;
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.input {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.filterBtn {
+  margin-left: $spacing-sm;
+  padding: 0 $spacing-md;
+  height: $button-height-md;
+  border-radius: $radius-button;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+
+  @include flex-center;
+}
+
+.filterBtnText {
+  font-size: $font-size-md;
+  color: $color-primary;
+}
+
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: $spacing-sm;
+}
+
+.chip {
+  margin: 0 $spacing-sm $spacing-sm 0;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-tag-bg;
+}
+
+.chipText {
+  font-size: $font-size-xs;
+  color: $color-primary;
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.historyTitle {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.historyClear {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.historyList {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.historyItem {
+  margin: 0 $spacing-sm $spacing-sm 0;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.historyText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.resultHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.resultTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.resultSub {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}

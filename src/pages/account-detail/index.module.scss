@@ -1,0 +1,93 @@
+@use '@/styles/variables.scss' as *;
+
+.hero {
+  margin-top: $spacing-md;
+  padding: $spacing-xl $spacing-lg;
+  border-radius: $radius-xl;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.heroTop {
+  display: flex;
+  align-items: center;
+}
+
+.heroBody {
+  flex: 1;
+  margin-left: $spacing-md;
+  min-width: 0;
+}
+
+.heroName {
+  display: block;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+
+  @include text-ellipsis;
+}
+
+.heroType {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.heroLabel {
+  display: block;
+  margin-top: $spacing-lg;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.heroBalance {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: 56rpx;
+  font-weight: $font-weight-bold;
+  line-height: $line-height-tight;
+}
+
+.heroMeta {
+  display: flex;
+  margin-top: $spacing-lg;
+  padding-top: $spacing-md;
+  border-top: 1rpx solid $color-divider;
+}
+
+.metaItem {
+  flex: 1;
+}
+
+.metaLabel {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.metaValue {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+}
+
+.debt {
+  color: $color-error;
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.listTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}

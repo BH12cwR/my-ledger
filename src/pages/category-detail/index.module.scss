@@ -1,0 +1,60 @@
+@use '@/styles/variables.scss' as *;
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: $spacing-md;
+  padding: $spacing-xl $spacing-lg;
+  border-radius: $radius-xl;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.heroName {
+  display: block;
+  margin-top: $spacing-md;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.heroKind {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.heroLabel {
+  display: block;
+  margin-top: $spacing-lg;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.heroTotal {
+  display: block;
+  margin-top: $spacing-xs;
+}
+
+.heroCount {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.listTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}

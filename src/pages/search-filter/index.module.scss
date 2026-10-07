@@ -1,0 +1,130 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: 0 $page-padding 200rpx;
+  box-sizing: border-box;
+}
+
+.sectionTitle {
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.chip {
+  margin: 0 $spacing-sm $spacing-sm 0;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.chipActive {
+  background-color: $color-primary;
+}
+
+.chipText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.chipTextActive {
+  color: $color-text-white;
+  font-weight: $font-weight-medium;
+}
+
+.rangeRow {
+  display: flex;
+  align-items: center;
+  padding: $spacing-sm 0;
+}
+
+.rangeInput {
+  flex: 1;
+  height: $button-height-md;
+  padding: 0 $spacing-md;
+  border-radius: $radius-md;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  text-align: center;
+}
+
+.rangeSep {
+  margin: 0 $spacing-sm;
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.dateValue {
+  flex: 1;
+  height: $button-height-md;
+  padding: 0 $spacing-md;
+  border-radius: $radius-md;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+
+  @include flex-center;
+}
+
+.dateText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.datePlaceholder {
+  color: $color-text-disabled;
+}
+
+.actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  padding: $spacing-md $page-padding;
+  padding-bottom: calc(#{$spacing-md} + env(safe-area-inset-bottom));
+  background-color: $color-bg-card;
+  box-shadow: $shadow-float;
+}
+
+.resetBtn {
+  flex: 1;
+  height: $button-height-lg;
+  margin-right: $spacing-md;
+  border-radius: $radius-button;
+  background-color: $color-bg-hover;
+
+  @include flex-center;
+}
+
+.resetText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.applyBtn {
+  flex: 2;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.applyText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}

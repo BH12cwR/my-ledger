@@ -1,0 +1,146 @@
+@use '@/styles/variables.scss' as *;
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-md;
+  margin-bottom: $spacing-sm;
+}
+
+.listTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.tagRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+  padding: $spacing-md;
+  border-radius: $radius-lg;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.dot {
+  width: 24rpx;
+  height: 24rpx;
+  margin-right: $spacing-md;
+  border-radius: $radius-round;
+}
+
+.tagName {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+
+  @include text-ellipsis;
+}
+
+.tagArrow {
+  font-size: $font-size-lg;
+  color: $color-text-disabled;
+}
+
+.addBtn {
+  margin-top: $spacing-md;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.addText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.sheetScroll {
+  max-height: 60vh;
+}
+
+.formRow {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.formLabel {
+  width: 160rpx;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.formInput {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  text-align: right;
+}
+
+.formTitle {
+  display: block;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.colorList {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.colorChip {
+  width: 64rpx;
+  height: 64rpx;
+  margin: 0 $spacing-sm $spacing-sm 0;
+  border-radius: $radius-round;
+}
+
+.colorChipActive {
+  border: 6rpx solid rgba(22, 119, 255, 0.25);
+}
+
+.sheetActions {
+  display: flex;
+  margin-top: $spacing-xl;
+}
+
+.deleteBtn {
+  flex: 1;
+  height: $button-height-lg;
+  margin-right: $spacing-md;
+  border-radius: $radius-button;
+  background-color: $color-bg-hover;
+
+  @include flex-center;
+}
+
+.deleteText {
+  font-size: $font-size-md;
+  color: $color-error;
+}
+
+.saveBtn {
+  flex: 1;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.saveText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}

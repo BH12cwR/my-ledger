@@ -1,0 +1,58 @@
+@use '@/styles/variables.scss' as *;
+
+.keypad {
+  display: flex;
+  background-color: $color-bg-card;
+  padding: $spacing-xs 0 $spacing-sm;
+}
+
+.grid {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.key {
+  width: 33.333%;
+  height: 108rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: all $transition-fast;
+
+  &:active {
+    background-color: $color-bg-hover;
+  }
+}
+
+.keyFn {
+  background-color: $color-bg-hover;
+}
+
+.keyText {
+  font-size: 44rpx;
+  color: $color-text-primary;
+  line-height: 1;
+}
+
+.confirm {
+  width: 190rpx;
+  margin: 0 $spacing-sm;
+  border-radius: $radius-md;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:active {
+    opacity: 0.9;
+  }
+}
+
+.confirmText {
+  color: $color-text-white;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  white-space: nowrap;
+}

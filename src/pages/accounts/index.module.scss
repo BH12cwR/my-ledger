@@ -1,0 +1,187 @@
+@use '@/styles/variables.scss' as *;
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-md;
+  margin-bottom: $spacing-sm;
+}
+
+.listTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.accountRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+  padding: $spacing-md;
+  border-radius: $radius-lg;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.accountBody {
+  flex: 1;
+  margin-left: $spacing-md;
+  min-width: 0;
+}
+
+.accountName {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+
+  @include text-ellipsis;
+}
+
+.accountType {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.accountAmount {
+  text-align: right;
+}
+
+.accountBalance {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.accountInitial {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.debt {
+  color: $color-error;
+}
+
+.addBtn {
+  margin-top: $spacing-md;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.addText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.sheetScroll {
+  max-height: 60vh;
+}
+
+.formRow {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.formLabel {
+  width: 160rpx;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.formInput {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  text-align: right;
+}
+
+.formTitle {
+  display: block;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.typeList {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.typeChip {
+  display: flex;
+  align-items: center;
+  margin: 0 $spacing-sm $spacing-sm 0;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-bg-hover;
+}
+
+.typeChipActive {
+  background-color: $color-tag-bg;
+}
+
+.typeIcon {
+  margin-right: $spacing-xs;
+  font-size: $font-size-md;
+}
+
+.typeText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.typeTextActive {
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.sheetActions {
+  display: flex;
+  margin-top: $spacing-xl;
+}
+
+.deleteBtn {
+  flex: 1;
+  height: $button-height-lg;
+  margin-right: $spacing-md;
+  border-radius: $radius-button;
+  background-color: $color-bg-hover;
+
+  @include flex-center;
+}
+
+.deleteText {
+  font-size: $font-size-md;
+  color: $color-error;
+}
+
+.saveBtn {
+  flex: 1;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.saveText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}

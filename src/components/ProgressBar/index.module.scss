@@ -1,0 +1,13 @@
+@use '@/styles/variables.scss' as *;
+
+.track {
+  width: 100%;
+  background-color: $color-bg-hover;
+  border-radius: $radius-round;
+  overflow: hidden;
+}
+
+.fill {
+  border-radius: $radius-round;
+  transition: width $transition-base;
+}

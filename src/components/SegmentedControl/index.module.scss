@@ -1,0 +1,49 @@
+@use '@/styles/variables.scss' as *;
+
+.segmented {
+  display: flex;
+  align-items: center;
+  background-color: $color-bg-hover;
+  border-radius: $radius-button;
+  padding: 6rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.item {
+  flex: 1;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-button;
+  transition: all $transition-base;
+}
+
+.itemActive {
+  background-color: $color-bg-card;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+.label {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  white-space: nowrap;
+}
+
+.labelActive {
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+.sm {
+  padding: 4rpx;
+
+  .item {
+    height: 52rpx;
+  }
+
+  .label {
+    font-size: $font-size-xs;
+  }
+}

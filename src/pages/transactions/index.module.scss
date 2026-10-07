@@ -1,0 +1,97 @@
+@use '@/styles/variables.scss' as *;
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  margin-top: $spacing-md;
+  padding: 0 $spacing-md;
+  height: $button-height-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-button;
+  box-shadow: $shadow-card;
+}
+
+.searchIcon {
+  margin-right: $spacing-sm;
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.searchPlaceholder {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.summary {
+  display: flex;
+  margin-top: $spacing-sm;
+  padding: $spacing-md $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+}
+
+.summaryItem {
+  flex: 1;
+}
+
+.summaryItem + .summaryItem {
+  border-left: 1rpx solid $color-divider;
+  padding-left: $spacing-lg;
+}
+
+.summaryLabel {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.summaryValue {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+}
+
+.expense {
+  color: $color-expense;
+}
+
+.income {
+  color: $color-income;
+}
+
+.group {
+  margin-top: $spacing-md;
+  background-color: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+  overflow: hidden;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-sm $spacing-md;
+  background-color: $color-bg-hover;
+}
+
+.groupDate {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+}
+
+.groupTotal {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.loadMore {
+  padding: $spacing-lg 0;
+  text-align: center;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}

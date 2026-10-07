@@ -1,0 +1,100 @@
+@use '@/styles/variables.scss' as *;
+
+.login {
+  min-height: 100vh;
+  padding: 0 $page-padding;
+  box-sizing: border-box;
+
+  @include flex-center;
+  flex-direction: column;
+}
+
+.logo {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 44rpx;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 12rpx 32rpx rgba(22, 119, 255, 0.3);
+
+  @include flex-center;
+}
+
+.logoText {
+  font-size: 84rpx;
+}
+
+.title {
+  margin-top: $spacing-lg;
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.desc {
+  margin-top: $spacing-sm;
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+  text-align: center;
+  line-height: $line-height-loose;
+}
+
+.featureList {
+  width: 100%;
+  max-width: $max-content-width;
+  margin-top: $spacing-xl;
+  padding: $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-card;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  padding: $spacing-sm 0;
+}
+
+.featureIcon {
+  width: 64rpx;
+  height: 64rpx;
+  margin-right: $spacing-md;
+  border-radius: $radius-md;
+  background-color: $color-tag-bg;
+
+  @include flex-center;
+}
+
+.featureIconText {
+  font-size: $font-size-lg;
+}
+
+.featureText {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.loginButton {
+  width: 100%;
+  max-width: $max-content-width;
+  margin-top: $spacing-xl;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.32);
+
+  @include flex-center;
+}
+
+.loginButtonText {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.tips {
+  margin-top: $spacing-md;
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+  text-align: center;
+}

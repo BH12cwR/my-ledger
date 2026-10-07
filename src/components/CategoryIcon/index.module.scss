@@ -1,0 +1,13 @@
+@use '@/styles/variables.scss' as *;
+
+.iconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-round;
+  flex-shrink: 0;
+}
+
+.iconText {
+  line-height: 1;
+}

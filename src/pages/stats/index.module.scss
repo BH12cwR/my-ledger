@@ -1,0 +1,109 @@
+@use '@/styles/variables.scss' as *;
+
+.overview {
+  margin-top: $spacing-md;
+  padding: $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-card;
+}
+
+.overviewLabel {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.overviewValue {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: 56rpx;
+  font-weight: $font-weight-bold;
+  line-height: $line-height-tight;
+}
+
+.overviewMeta {
+  display: flex;
+  margin-top: $spacing-md;
+  padding-top: $spacing-md;
+  border-top: 1rpx solid $color-divider;
+}
+
+.metaItem {
+  flex: 1;
+}
+
+.metaLabel {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.metaValue {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+.rankItem {
+  display: flex;
+  align-items: center;
+  padding: $spacing-sm 0;
+}
+
+.rankIcon {
+  margin-right: $spacing-sm;
+}
+
+.rankBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.rankTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rankName {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+
+  @include text-ellipsis;
+}
+
+.rankAmount {
+  margin-left: $spacing-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+.rankBarWrap {
+  margin-top: $spacing-xs;
+  display: flex;
+  align-items: center;
+}
+
+.rankBar {
+  flex: 1;
+  margin-right: $spacing-sm;
+}
+
+.rankRatio {
+  width: 68rpx;
+  text-align: right;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.legend {
+  display: flex;
+  justify-content: center;
+  margin-top: $spacing-sm;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}

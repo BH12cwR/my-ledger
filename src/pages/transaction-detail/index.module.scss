@@ -1,0 +1,106 @@
+@use '@/styles/variables.scss' as *;
+
+.hero {
+  margin-top: $spacing-md;
+  padding: $spacing-xl $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-card;
+  text-align: center;
+}
+
+.heroIcon {
+  display: inline-flex;
+}
+
+.heroAmount {
+  display: block;
+  margin-top: $spacing-md;
+  font-size: 64rpx;
+  font-weight: $font-weight-bold;
+  line-height: $line-height-tight;
+}
+
+.heroType {
+  display: inline-block;
+  margin-top: $spacing-md;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-tag-bg;
+  font-size: $font-size-xs;
+  color: $color-primary;
+}
+
+.refundBadge {
+  display: inline-block;
+  margin-top: $spacing-md;
+  margin-left: $spacing-sm;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: rgba(245, 34, 45, 0.1);
+  font-size: $font-size-xs;
+  color: $color-error;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md 0;
+}
+
+.row + .row {
+  border-top: 1rpx solid $color-divider;
+}
+
+.rowLabel {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.rowValue {
+  flex: 1;
+  margin-left: $spacing-lg;
+  text-align: right;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  word-break: break-all;
+}
+
+.rowPlaceholder {
+  color: $color-text-disabled;
+}
+
+.actions {
+  margin-top: $spacing-lg;
+}
+
+.action {
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+  margin-bottom: $spacing-md;
+
+  @include flex-center;
+}
+
+.actionPrimary {
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+}
+
+.actionPrimaryText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.actionText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.actionDanger {
+  color: $color-error;
+}

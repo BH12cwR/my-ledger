@@ -1,0 +1,132 @@
+@use '@/styles/variables.scss' as *;
+
+.profile {
+  display: flex;
+  align-items: center;
+  margin-top: $spacing-md;
+  padding: $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-card;
+}
+
+.avatar {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: $radius-round;
+  background-color: $color-bg-hover;
+}
+
+.profileBody {
+  flex: 1;
+  margin-left: $spacing-md;
+  min-width: 0;
+}
+
+.nickname {
+  display: block;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+
+  @include text-ellipsis;
+}
+
+.sub {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.netWorthCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-md;
+  padding: $spacing-lg;
+  border-radius: $radius-xl;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.24);
+}
+
+.netWorthLabel {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.netWorthValue {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+}
+
+.netWorthArrow {
+  font-size: $font-size-xl;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md 0;
+}
+
+.menuItem + .menuItem {
+  border-top: 1rpx solid $color-divider;
+}
+
+.menuIcon {
+  width: 64rpx;
+  height: 64rpx;
+  margin-right: $spacing-md;
+  border-radius: $radius-md;
+  background-color: $color-bg-hover;
+
+  @include flex-center;
+}
+
+.menuIconText {
+  font-size: $font-size-lg;
+}
+
+.menuLabel {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.menuValue {
+  margin-right: $spacing-sm;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.menuArrow {
+  font-size: $font-size-lg;
+  color: $color-text-disabled;
+}
+
+.logout {
+  margin-top: $spacing-lg;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+
+  @include flex-center;
+}
+
+.logoutText {
+  font-size: $font-size-md;
+  color: $color-error;
+}
+
+.version {
+  margin-top: $spacing-lg;
+  text-align: center;
+  font-size: $font-size-xs;
+  color: $color-text-disabled;
+}

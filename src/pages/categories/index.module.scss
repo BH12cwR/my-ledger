@@ -1,0 +1,184 @@
+@use '@/styles/variables.scss' as *;
+
+.kindBar {
+  margin-top: $spacing-md;
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+}
+
+.listTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.catRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-sm;
+  padding: $spacing-md;
+  border-radius: $radius-lg;
+  background-color: $color-bg-card;
+  box-shadow: $shadow-card;
+}
+
+.catBody {
+  flex: 1;
+  margin-left: $spacing-md;
+  min-width: 0;
+}
+
+.catName {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+
+  @include text-ellipsis;
+}
+
+.catBadge {
+  display: inline-block;
+  margin-top: $spacing-xs;
+  padding: 2rpx $spacing-sm;
+  border-radius: $radius-xs;
+  background-color: $color-bg-hover;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.catArrow {
+  font-size: $font-size-lg;
+  color: $color-text-disabled;
+}
+
+.addBtn {
+  margin-top: $spacing-md;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.addText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}
+
+.sheetScroll {
+  max-height: 60vh;
+}
+
+.formRow {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.formLabel {
+  width: 160rpx;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.formInput {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  text-align: right;
+}
+
+.formTitle {
+  display: block;
+  margin-top: $spacing-lg;
+  margin-bottom: $spacing-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.iconList {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.iconChip {
+  width: 88rpx;
+  height: 88rpx;
+  margin: 0 $spacing-sm $spacing-sm 0;
+  border-radius: $radius-md;
+  background-color: $color-bg-hover;
+
+  @include flex-center;
+}
+
+.iconChipActive {
+  background-color: $color-tag-bg;
+  border: 2rpx solid $color-primary;
+}
+
+.iconText {
+  font-size: $font-size-xl;
+}
+
+.colorList {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.colorChip {
+  width: 64rpx;
+  height: 64rpx;
+  margin: 0 $spacing-sm $spacing-sm 0;
+  border-radius: $radius-round;
+}
+
+.colorChipActive {
+  border: 6rpx solid rgba(22, 119, 255, 0.25);
+}
+
+.sheetActions {
+  display: flex;
+  margin-top: $spacing-xl;
+}
+
+.deleteBtn {
+  flex: 1;
+  height: $button-height-lg;
+  margin-right: $spacing-md;
+  border-radius: $radius-button;
+  background-color: $color-bg-hover;
+
+  @include flex-center;
+}
+
+.deleteText {
+  font-size: $font-size-md;
+  color: $color-error;
+}
+
+.saveBtn {
+  flex: 1;
+  height: $button-height-lg;
+  border-radius: $radius-button;
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-dark 100%);
+  box-shadow: 0 8rpx 24rpx rgba(22, 119, 255, 0.28);
+
+  @include flex-center;
+}
+
+.saveText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-white;
+}

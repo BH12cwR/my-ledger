@@ -1,0 +1,55 @@
+@use '@/styles/variables.scss' as *;
+
+.row {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.clickable {
+  transition: all $transition-base;
+
+  &:active {
+    opacity: 0.7;
+  }
+}
+
+.middle {
+  flex: 1;
+  min-width: 0;
+  margin: 0 $spacing-md;
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+  @include text-ellipsis;
+}
+
+.sub {
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  @include text-ellipsis;
+}
+
+.right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.refundTag {
+  margin-top: 6rpx;
+  font-size: $font-size-xs;
+  color: $color-warning;
+}

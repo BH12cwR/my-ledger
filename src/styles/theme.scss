@@ -1,0 +1,40 @@
+// ============================================
+// 主题配色变量（我的账本 · 财务类配色）
+// ============================================
+
+// 品牌主题色
+$color-primary: #1677ff;
+$color-primary-light: #4096ff;
+$color-primary-dark: #0958d9;
+
+// 功能色
+$color-success: #00b578;
+$color-warning: #ff8f1f;
+$color-error: #f5222d;
+$color-info: #1677ff;
+
+// 背景色
+$color-bg-page: #f5f6f7;
+$color-bg-card: #ffffff;
+$color-bg-hover: #f2f3f5;
+
+// 文本色
+$color-text-primary: #1d2129;
+$color-text-secondary: #4e5969;
+$color-text-tertiary: #86909c;
+$color-text-disabled: #c9cdd4;
+$color-text-white: #ffffff;
+
+// 边框色
+$color-border: #e5e6eb;
+$color-divider: #f2f3f5;
+
+// ============================================
+// 业务语义色（记账）
+// ============================================
+$color-expense: #f5222d; // 支出（红）
+$color-income: #00b578; // 收入（绿）
+$color-transfer: #1677ff; // 转账（蓝）
+$color-amount-expense: $color-expense;
+$color-amount-income: $color-income;
+$color-tag-bg: #e8f3ff; // 标签/胶囊底色

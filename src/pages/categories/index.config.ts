@@ -1,0 +1,4 @@
+export default definePageConfig({
+  navigationBarTitleText: '分类管理',
+  backgroundTextStyle: 'dark'
+})

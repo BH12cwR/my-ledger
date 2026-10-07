@@ -1,0 +1,48 @@
+@use '@/styles/variables.scss' as *;
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.value {
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+  margin-bottom: 6rpx;
+}
+
+.barArea {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar {
+  width: 28rpx;
+  border-radius: $radius-xs;
+  transition: height $transition-base;
+}
+
+.axis {
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  white-space: nowrap;
+}
+
+.axisActive {
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}

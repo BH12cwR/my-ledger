@@ -1,0 +1,223 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  padding: 0 $page-padding 560rpx;
+  box-sizing: border-box;
+}
+
+.amountBar {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  margin-top: $spacing-md;
+  padding: $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+}
+
+.amountSymbol {
+  margin-right: $spacing-xs;
+  font-size: $font-size-xl;
+  color: $color-text-secondary;
+}
+
+.amountValue {
+  font-size: 72rpx;
+  font-weight: $font-weight-bold;
+  line-height: $line-height-tight;
+  color: $color-text-primary;
+  font-variant-numeric: tabular-nums;
+}
+
+.amountPlaceholder {
+  color: $color-text-disabled;
+}
+
+.catScroll {
+  margin-top: $spacing-md;
+  white-space: nowrap;
+}
+
+.catItem {
+  display: inline-block;
+  width: 140rpx;
+  padding: $spacing-sm 0;
+  margin-right: $spacing-sm;
+  border-radius: $radius-md;
+  text-align: center;
+  background-color: $color-bg-card;
+  box-sizing: border-box;
+}
+
+.catItemActive {
+  background-color: $color-tag-bg;
+  box-shadow: inset 0 0 0 2rpx $color-primary;
+}
+
+.catIcon {
+  display: block;
+  font-size: 44rpx;
+  line-height: 1.2;
+}
+
+.catName {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+
+  @include text-ellipsis;
+}
+
+.catNameActive {
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.transferBox {
+  margin-top: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+  background-color: $color-bg-card;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+}
+
+.transferRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-sm 0;
+}
+
+.transferLabel {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.transferValue {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.transferPlaceholder {
+  color: $color-text-disabled;
+}
+
+.transferArrow {
+  margin: $spacing-xs 0;
+  text-align: center;
+  font-size: $font-size-lg;
+  color: $color-text-tertiary;
+}
+
+.formRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md 0;
+}
+
+.formRow + .formRow {
+  border-top: 1rpx solid $color-divider;
+}
+
+.formLabel {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.formValue {
+  display: flex;
+  align-items: center;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.formPlaceholder {
+  color: $color-text-disabled;
+}
+
+.formArrow {
+  margin-left: $spacing-xs;
+  font-size: $font-size-md;
+  color: $color-text-disabled;
+}
+
+.remarkInput {
+  flex: 1;
+  margin-left: $spacing-lg;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  text-align: right;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  padding: $spacing-xs 0 0;
+}
+
+.tagChip {
+  margin: 0 $spacing-sm $spacing-sm 0;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-round;
+  background-color: $color-bg-hover;
+}
+
+.tagChipActive {
+  background-color: $color-tag-bg;
+}
+
+.tagText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.tagTextActive {
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.keypadHolder {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: $color-bg-card;
+  box-shadow: $shadow-float;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md 0;
+}
+
+.optionIcon {
+  margin-right: $spacing-md;
+}
+
+.optionName {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.optionSub {
+  margin-left: $spacing-sm;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.optionCheck {
+  font-size: $font-size-lg;
+  color: $color-primary;
+}
+
+.sheetScroll {
+  max-height: 60vh;
+}
